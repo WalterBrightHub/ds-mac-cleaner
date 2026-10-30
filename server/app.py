@@ -414,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, body, "application/json; charset=utf-8",
                        {"Content-Disposition": f'attachment; filename="{scan_id}.json"'})
             return
-        if path in ("/", "/index.html"):
+        if path in ("/", "/index.html", "/overview", "/clean", "/history", "/settings"):
             self._serve_index()
             return
         if path.startswith("/static/"):

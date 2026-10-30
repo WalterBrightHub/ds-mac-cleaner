@@ -7,6 +7,12 @@
   const TOKEN = $('meta[name="dsmc-token"]').content;
   const VERSION = $('meta[name="dsmc-version"]').content;
 
+  const ROUTES = {
+    overview: { title: "概览", kicker: "WORKSPACE" },
+    clean: { title: "清理", kicker: "CLEANUP" },
+    history: { title: "历史", kicker: "HISTORY" },
+    settings: { title: "设置", kicker: "SETTINGS" },
+  };
   const CATEGORY_ORDER = ["containers", "appsupport", "caches", "dev", "media", "system", "user", "other"];
   const CATEGORY_LABELS = {
     containers: "应用容器",
@@ -38,9 +44,44 @@
 
   document.addEventListener("DOMContentLoaded", init);
 
+  function routeFromPath() {
+    const part = location.pathname.replace(/\/+$/, "").split("/").pop();
+    return ROUTES[part] ? part : "overview";
+  }
+
+  function navigate(route, push = true) {
+    if (!ROUTES[route]) route = "overview";
+    if (push) {
+      const target = `/${route}`;
+      if (location.pathname !== target) history.pushState({ route }, "", target + location.hash);
+    }
+    renderRoute(route);
+  }
+
+  function renderRoute(route, scroll = true) {
+    if (!ROUTES[route]) route = "overview";
+    $$(".route-view").forEach((view) => {
+      view.hidden = view.dataset.view !== route;
+    });
+    $$(".nav-item").forEach((item) => {
+      item.classList.toggle("active", item.dataset.route === route);
+    });
+    $("#page-title").textContent = ROUTES[route].title;
+    $("#page-kicker").textContent = ROUTES[route].kicker;
+    document.title = `${ROUTES[route].title} · DS 麦清理`;
+    if (scroll) window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
   async function init() {
     cacheElements();
     bindEvents();
+    const initialRoute = routeFromPath();
+    const params = new URLSearchParams(location.search);
+    const launchedFromApp = params.get("launch") === "1";
+    if (launchedFromApp || location.pathname === "/" || !ROUTES[location.pathname.replace(/\/+$/, "").split("/").pop()]) {
+      history.replaceState(null, "", `/${initialRoute}${location.hash}`);
+    }
+    renderRoute(initialRoute, false);
     try {
       const health = await api("/api/health");
       updateDbPill(health.db);
@@ -56,16 +97,11 @@
     } catch (err) {
       toast("读取报告失败", err.message || String(err), "error");
     }
-    const params = new URLSearchParams(location.search);
-    const launchedFromApp = params.get("launch") === "1";
-    if (launchedFromApp) {
-      history.replaceState(null, "", location.pathname + location.hash);
-    }
     try {
       const active = await api("/api/scans/active");
       if (active.task) {
         // A refresh during a scan must attach, never start a second scan.
-        attachScan(active.task, Boolean(state.scan));
+        attachScan(active.task);
       } else if (launchedFromApp) {
         // Only a Launchpad/app open starts a scan; a normal refresh does not.
         startScan(true);
@@ -78,15 +114,15 @@
   }
 
   function cacheElements() {
-    el.scanOverlay = $("#scan-overlay");
-    el.scanStage = $("#scan-stage");
-    el.scanPercent = $("#scan-percent");
-    el.scanRing = $("#scan-ring-progress");
+    el.scanBanner = $("#scan-banner");
+    el.scanBannerPercent = $("#scan-banner-percent");
+    el.scanBannerStage = $("#scan-banner-stage");
+    el.scanProgressBar = $("#scan-progress-bar");
     el.scanMeta = $("#scan-meta");
     el.scanCancel = $("#scan-cancel");
-    el.refreshCancel = $("#refresh-cancel");
-    el.scanBtn = $("#scan-btn");
     el.rescanTop = $("#rescan-top");
+    el.sideLastScan = $("#side-last-scan");
+    el.cleanSummary = $("#clean-summary");
     el.dbPill = $("#db-pill");
     el.dbDot = $("#db-dot");
     el.dbLabel = $("#db-label");
@@ -113,8 +149,6 @@
     el.historyNext = $("#history-next");
     el.historyPageSize = $("#history-page-size");
     el.toast = $("#toast");
-    el.refreshToast = $("#refresh-toast");
-    el.refreshText = $("#refresh-text");
     el.toastTitle = $("#toast-title");
     el.toastBody = $("#toast-body");
     el.dialog = $("#confirm-dialog");
@@ -125,16 +159,16 @@
     el.dialogSize = $("#dialog-size");
     el.dialogCount = $("#dialog-count");
     el.dialogList = $("#dialog-list");
+    el.settingsDbDot = $("#settings-db-dot");
+    el.settingsDbState = $("#settings-db-state");
   }
 
   function bindEvents() {
-    $("#scan-btn").addEventListener("click", () => startScan(false));
     $("#rescan-top").addEventListener("click", () => startScan(false));
-    $("#scan-empty")?.addEventListener("click", () => startScan(false));
-    $("#jump-clean").addEventListener("click", () => $("#clean").scrollIntoView({ behavior: "smooth" }));
-    $("#storage-settings").addEventListener("click", openStorageSettings);
+    $("#jump-clean").addEventListener("click", () => navigate("clean"));
     $("#db-pill").addEventListener("click", () => (state.db?.connected ? showDbInfo() : startDb()));
     $("#start-db").addEventListener("click", startDb);
+    $("#settings-start-db").addEventListener("click", startDb);
     $("#refresh-history").addEventListener("click", () => loadHistory(state.historyPage));
     el.historyPrev.addEventListener("click", () => loadHistory(state.historyPage - 1));
     el.historyNext.addEventListener("click", () => loadHistory(state.historyPage + 1));
@@ -146,7 +180,13 @@
     $("#clear-all").addEventListener("click", clearSelection);
     $("#clean-selected").addEventListener("click", openConfirm);
     el.scanCancel.addEventListener("click", cancelScan);
-    el.refreshCancel.addEventListener("click", cancelScan);
+    $$(".nav-item").forEach((item) => {
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigate(item.dataset.route);
+      });
+    });
+    window.addEventListener("popstate", () => renderRoute(routeFromPath()));
 
     el.riskFilters.addEventListener("click", (event) => {
       const chip = event.target.closest(".chip[data-filter]");
@@ -165,6 +205,12 @@
     });
 
     el.cleanGroups.addEventListener("click", (event) => {
+      if (event.target.closest("[data-show-review]")) {
+        state.filter = "review";
+        $$(".chip", el.riskFilters).forEach((node) => node.classList.toggle("active", node.dataset.filter === "review"));
+        renderCleanGroups();
+        return;
+      }
       const reveal = event.target.closest("[data-reveal]");
       if (reveal) {
         revealPath(reveal.dataset.reveal);
@@ -214,7 +260,7 @@
   }
 
   // --------------------------------------------------------------- scanning --
-  async function startScan(auto, silent = Boolean(state.scan)) {
+  async function startScan(auto) {
     if (state.scanning || state.cleaning) return;
     try {
       const res = await api("/api/scans", {
@@ -222,40 +268,25 @@
         body: { trigger: auto ? "launch" : "manual" },
       });
       if (!res.task) throw new Error("服务器没有返回扫描任务");
-      await attachScan(res.task, silent);
+      await attachScan(res.task);
     } catch (err) {
       toast("扫描失败", err.message || String(err), "error");
     }
   }
 
-  async function attachScan(task, silent = Boolean(state.scan)) {
+  async function attachScan(task) {
     if (state.scanning && state.scanTaskId && state.scanTaskId !== task.id) return;
     state.scanning = true;
     state.scanTaskId = task.id;
-    el.scanBtn.disabled = true;
     el.rescanTop.disabled = true;
     el.scanCancel.disabled = false;
-    el.refreshCancel.disabled = false;
-    el.scanCancel.textContent = "中断扫描";
-    if (silent) {
-      el.refreshToast.hidden = false;
-      el.refreshText.textContent = "正在准备只读扫描…";
-    } else {
-      el.scanOverlay.hidden = false;
-      document.body.classList.add("locked");
-      setScanProgress(task.progress || 1, task.stage || "准备只读扫描…");
-    }
-    const showProgress = (current) => {
-      const pct = current.progress || 0;
-      const stage = current.stage || "扫描中…";
-      if (silent) {
-        el.refreshText.textContent = `${stage} · ${pct}%`;
-      } else {
-        setScanProgress(pct, stage);
-      }
-    };
+    el.scanCancel.textContent = "中断";
+    el.scanBanner.hidden = false;
+    setScanProgress(task.progress || 1, task.stage || "准备只读扫描…");
     try {
-      await pollTask(task.id, showProgress, (current) => {
+      await pollTask(task.id, (current) => {
+        setScanProgress(current.progress || 0, current.stage || "扫描中…");
+      }, (current) => {
         if (current.status === "cancelled") {
           toast("扫描已中断", "上次报告保持不变，你可以随时重新扫描。");
           return;
@@ -270,22 +301,18 @@
     } finally {
       state.scanning = false;
       state.scanTaskId = null;
-      el.scanBtn.disabled = false;
       el.rescanTop.disabled = false;
-      await sleep(260);
-      el.scanOverlay.hidden = true;
-      el.refreshToast.hidden = true;
       el.scanCancel.disabled = false;
-      el.refreshCancel.disabled = false;
-      el.scanCancel.textContent = "中断扫描";
-      document.body.classList.remove("locked");
+      el.scanCancel.textContent = "中断";
+      await sleep(300);
+      el.scanBanner.hidden = true;
+      setScanProgress(0, "准备只读扫描…");
     }
   }
 
   async function cancelScan() {
     if (!state.scanTaskId) return;
     el.scanCancel.disabled = true;
-    el.refreshCancel.disabled = true;
     el.scanCancel.textContent = "正在中断…";
     try {
       await api(`/api/scans/${encodeURIComponent(state.scanTaskId)}/cancel`, {
@@ -295,8 +322,7 @@
     } catch (err) {
       toast("无法中断扫描", err.message || String(err), "error");
       el.scanCancel.disabled = false;
-      el.refreshCancel.disabled = false;
-      el.scanCancel.textContent = "中断扫描";
+      el.scanCancel.textContent = "中断";
     }
   }
 
@@ -322,10 +348,9 @@
 
   function setScanProgress(percent, stage) {
     const pct = Math.max(0, Math.min(100, Number(percent) || 0));
-    el.scanPercent.innerHTML = `${pct}<span>%</span>`;
-    el.scanStage.textContent = stage;
-    const circumference = 2 * Math.PI * 52;
-    el.scanRing.style.strokeDashoffset = String(circumference * (1 - pct / 100));
+    el.scanBannerPercent.textContent = `${pct}%`;
+    el.scanBannerStage.textContent = stage;
+    el.scanProgressBar.style.width = `${pct}%`;
   }
 
   // ------------------------------------------------------------- render scan --
@@ -356,13 +381,14 @@
     $("#disk-free").textContent = fmt(disk.free);
     $("#disk-system").textContent = fmt(scan.summary?.system_data_estimate);
     $("#host-chip").textContent = scan.host?.hostname || "Macintosh HD";
-    el.scanBtn.textContent = "重新扫描";
-    el.scanMeta.innerHTML = `<span class="pulse-dot"></span>扫描于 ${formatDate(scan.created_at)} · 用时 ${(scan.duration_ms / 1000).toFixed(1)} 秒 · ${scan.summary.item_count} 项 · 全程只读`;
+    el.scanMeta.textContent = `最近扫描 ${formatDate(scan.created_at)} · 用时 ${(scan.duration_ms / 1000).toFixed(1)} 秒 · ${scan.summary.item_count} 项`;
+    el.sideLastScan.textContent = timeAgo(scan.created_at);
     $("#stat-time").textContent = timeAgo(scan.created_at);
     $("#stat-duration").textContent = `${scan.host?.macos || "macOS"} · ${(scan.duration_ms / 1000).toFixed(1)}s`;
     $("#stat-hidden").textContent = fmt(scan.summary.system_data_estimate);
     $("#stat-hidden-note").textContent = `其中 ~/Library ${fmt(scan.summary.library_bytes)}`;
     $("#stat-cleanable").textContent = fmt(scan.summary.cleanable_bytes);
+    el.cleanSummary.textContent = fmt(scan.summary.cleanable_bytes);
     const safeCount = scan.items.filter((i) => i.cleanable).length;
     $("#stat-cleanable-note").textContent = safeCount
       ? `${safeCount} 个白名单缓存`
@@ -483,6 +509,7 @@
         <div class="empty-orbit"></div>
         <h3>${noSafe ? "当前没有可安全清理的缓存" : "这个筛选下没有项目"}</h3>
         <p>${noSafe ? "可重建缓存已经清空。你仍可以查看「需人工确认」中的大文件，或稍后重新扫描。" : "切换到其他分类看看。"}</p>
+        ${noSafe ? '<button class="btn btn-ghost btn-small" type="button" data-show-review>查看需人工确认</button>' : ""}
       </div>`;
       return;
     }
@@ -716,10 +743,12 @@
   }
 
   async function startDb() {
-    const button = $("#start-db");
-    const old = button.textContent;
-    button.disabled = true;
-    button.textContent = "正在启动…";
+    const buttons = [$("#start-db"), $("#settings-start-db")].filter(Boolean);
+    const labels = buttons.map((button) => button.textContent);
+    buttons.forEach((button) => {
+      button.disabled = true;
+      button.textContent = "正在启动…";
+    });
     try {
       const res = await api("/api/db/start", { method: "POST", body: {} });
       if (!res.ok) throw new Error(res.error || "数据库启动失败");
@@ -729,8 +758,10 @@
     } catch (err) {
       toast("数据库启动失败", err.message || String(err), "error");
     } finally {
-      button.disabled = false;
-      button.textContent = old;
+      buttons.forEach((button, idx) => {
+        button.disabled = false;
+        button.textContent = labels[idx];
+      });
     }
   }
 
@@ -755,10 +786,14 @@
       el.dbDot.className = "status-dot online";
       el.dbLabel.textContent = "历史库在线";
       el.dbPill.title = `PostgreSQL ${state.db.version || ""} · ${state.db.host || ""}`;
+      el.settingsDbDot.className = "status-dot online";
+      el.settingsDbState.textContent = "已连接";
     } else {
       el.dbDot.className = "status-dot warn";
       el.dbLabel.textContent = "历史库离线";
       el.dbPill.title = state.db.error || "本地记录模式";
+      el.settingsDbDot.className = "status-dot warn";
+      el.settingsDbState.textContent = "未连接";
     }
   }
 
@@ -815,6 +850,7 @@
   function refreshRelativeTimes() {
     if (state.scan) {
       $("#stat-time").textContent = timeAgo(state.scan.created_at);
+      el.sideLastScan.textContent = timeAgo(state.scan.created_at);
     }
   }
 

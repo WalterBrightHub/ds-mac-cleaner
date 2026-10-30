@@ -5,393 +5,335 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="dsmc-token" content="__DSMC_TOKEN__">
   <meta name="dsmc-version" content="__DSMC_VERSION__">
-  <meta name="theme-color" content="#080b0c">
-  <meta name="description" content="看清 macOS 的「系统数据」，只清理真正可以重建的缓存。">
-  <title>DS 麦清理 · 看清系统数据</title>
+  <meta name="theme-color" content="#f3f6f1">
+  <meta name="description" content="DS 麦清理：macOS 存储扫描、清理与历史记录。">
+  <title>概览 · DS 麦清理</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 </head>
 <body>
-  <div class="ambient ambient-a"></div>
-  <div class="ambient ambient-b"></div>
-  <div class="grain"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/overview" data-route="overview" aria-label="DS 麦清理概览">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M9 8.5h7.2c4.1 0 6.8 2.6 6.8 6.7 0 3.4-1.7 5.6-4.6 6.4L23 28h-4.7l-3.8-5.6h-1.7V28H9V8.5Z" fill="currentColor"/>
+            <path d="M12.8 12v6.4h3.1c2 0 3.2-1.2 3.2-3.2 0-2-1.2-3.2-3.2-3.2h-3.1Z" fill="#07110c"/>
+            <circle cx="25" cy="7" r="3" fill="#0f7a53"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>DS 麦清理</strong>
+          <span>LOCAL STORAGE TOOL</span>
+        </span>
+      </a>
 
-  <header class="topbar">
-    <a class="brand" href="#top" aria-label="DS 麦清理首页">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32" fill="none">
-          <path d="M9 8.5h7.2c4.1 0 6.8 2.6 6.8 6.7 0 3.4-1.7 5.6-4.6 6.4L23 28h-4.7l-3.8-5.6h-1.7V28H9V8.5Z" fill="currentColor"/>
-          <path d="M12.8 12v6.4h3.1c2 0 3.2-1.2 3.2-3.2 0-2-1.2-3.2-3.2-3.2h-3.1Z" fill="#07110c"/>
-          <circle cx="25" cy="7" r="3" fill="#9bf6c1"/>
-        </svg>
-      </span>
-      <span class="brand-copy">
-        <strong>DS 麦清理</strong>
-        <span>MAC STORAGE SURGEON</span>
-      </span>
-    </a>
-    <nav class="nav" aria-label="主导航">
-      <a href="#overview">概览</a>
-      <a href="#why">成因</a>
-      <a href="#clean">清理</a>
-      <a href="#history">历史</a>
-      <a href="#method">安全边界</a>
-    </nav>
-    <div class="topbar-actions">
-      <button class="db-pill" id="db-pill" type="button" title="点击检查历史数据库">
-        <span class="status-dot" id="db-dot"></span>
-        <span id="db-label">历史库检测中</span>
-      </button>
-      <button class="btn btn-ghost btn-small" id="rescan-top" type="button">
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.2 6.2A5.5 5.5 0 1 0 13 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13.5 2.8v3.8H9.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        重新扫描
-      </button>
-    </div>
-  </header>
+      <nav class="side-nav" aria-label="功能模块">
+        <a class="nav-item active" href="/overview" data-route="overview">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="3" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.35"/><rect x="11.5" y="3" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.35"/><rect x="3" y="11.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.35"/><rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.4" stroke="currentColor" stroke-width="1.35"/></svg>
+          <span><strong>概览</strong><small>存储态势</small></span>
+        </a>
+        <a class="nav-item" href="/clean" data-route="clean">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m4 12.5 6-8 6 8-6 3-6-3Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m7.5 8 2.5 2 2.5-2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg>
+          <span><strong>清理</strong><small>安全缓存</small></span>
+        </a>
+        <a class="nav-item" href="/history" data-route="history">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M10 6.5V10l2.5 1.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg>
+          <span><strong>历史</strong><small>扫描记录</small></span>
+        </a>
+        <a class="nav-item" href="/settings" data-route="settings">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.3"/><path d="M10 2.8v2M10 15.2v2M2.8 10h2M15.2 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span><strong>设置</strong><small>数据库与边界</small></span>
+        </a>
+      </nav>
 
-  <main id="top">
-    <section class="hero" id="overview">
-      <div class="hero-copy">
-        <div class="eyebrow"><span></span> SYSTEM DATA, DECODED</div>
-        <h1>系统数据不是垃圾箱，<br><em>它只是没有名字。</em></h1>
-        <p class="lede">
-          macOS 把应用容器、聊天文件、缓存、Docker 虚拟磁盘和交换文件统统塞进「系统数据」。
-          这里把它们逐一拆开，只让你清理真正能重建的部分。
-        </p>
-        <div class="hero-actions">
-          <button class="btn btn-primary" id="scan-btn" type="button">
-            <span class="btn-spark"></span>
-            开始只读扫描
+      <div class="sidebar-foot">
+        <div class="sidebar-scan">
+          <span class="sidebar-label">上次扫描</span>
+          <strong id="side-last-scan">尚未扫描</strong>
+        </div>
+        <span class="sidebar-version">v__DSMC_VERSION__ · local only</span>
+      </div>
+    </aside>
+
+    <div class="app-frame">
+      <header class="app-header">
+        <div class="page-heading">
+          <span class="page-kicker" id="page-kicker">WORKSPACE</span>
+          <h1 id="page-title">概览</h1>
+        </div>
+        <div class="header-actions">
+          <button class="db-pill" id="db-pill" type="button" title="点击检查历史数据库">
+            <span class="status-dot" id="db-dot"></span>
+            <span id="db-label">历史库检测中</span>
           </button>
-          <button class="btn btn-ghost" id="storage-settings" type="button">
-            打开系统存储设置
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <button class="btn btn-primary" id="rescan-top" type="button">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.2 6.2A5.5 5.5 0 1 0 13 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M13.5 2.8v3.8H9.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            重新扫描
           </button>
         </div>
-        <div class="scan-meta" id="scan-meta">
-          <span class="pulse-dot"></span>
-          尚未扫描 · 全程只读，不会自动删除任何东西
-        </div>
-      </div>
+      </header>
 
-      <div class="disk-card">
-        <div class="disk-card-head">
-          <span>启动磁盘</span>
-          <span class="host-chip" id="host-chip">Macintosh HD</span>
-        </div>
-        <div class="disk-ring" id="disk-ring" style="--used: 0;">
-          <div class="disk-ring-inner">
-            <span class="disk-kicker">已使用</span>
-            <strong id="disk-percent">—</strong>
-            <span class="disk-caption" id="disk-caption">等待扫描</span>
+      <div class="scan-banner" id="scan-banner" hidden>
+        <span class="refresh-spinner"></span>
+        <div class="scan-banner-copy">
+          <div class="scan-banner-line">
+            <strong>正在扫描本机</strong>
+            <span id="scan-banner-percent">0%</span>
           </div>
+          <span id="scan-banner-stage">准备只读扫描…</span>
+          <div class="scan-progress"><i id="scan-progress-bar"></i></div>
         </div>
-        <div class="disk-legend">
-          <div><span>总容量</span><strong id="disk-total">—</strong></div>
-          <div><span>可用</span><strong id="disk-free">—</strong></div>
-          <div><span>“系统数据”估算</span><strong id="disk-system">—</strong></div>
-        </div>
-        <div class="disk-footnote">
-          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.2"/><path d="M8 7.2v4M8 4.8v.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-          Finder 的「系统数据」是分类残差，不是某个真实文件夹。
-        </div>
+        <button class="btn btn-ghost btn-small" id="scan-cancel" type="button">中断</button>
       </div>
-    </section>
 
-    <section class="stats" aria-label="扫描摘要">
-      <article class="stat-card">
-        <div class="stat-icon mint">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 6.5 10 3l7 3.5v7L10 17l-7-3.5v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M3 6.5 10 10l7-3.5M10 10v7" stroke="currentColor" stroke-width="1.3"/></svg>
-        </div>
-        <div class="stat-copy">
-          <span>隐藏 / 系统数据估算</span>
-          <strong id="stat-hidden">—</strong>
-          <small id="stat-hidden-note">扫描后计算</small>
-        </div>
-      </article>
-      <article class="stat-card">
-        <div class="stat-icon green">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 13.5 8 9l2.5 2.3L16 5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10v5H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        </div>
-        <div class="stat-copy">
-          <span>可安全清理</span>
-          <strong id="stat-cleanable">—</strong>
-          <small id="stat-cleanable-note">白名单缓存</small>
-        </div>
-      </article>
-      <article class="stat-card">
-        <div class="stat-icon peach">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="7" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 16c.4-3 2.6-4.6 5.7-4.6 3.1 0 5.3 1.6 5.7 4.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M14.5 5.5v4M12.5 7.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        </div>
-        <div class="stat-copy">
-          <span>需要你确认</span>
-          <strong id="stat-review">—</strong>
-          <small id="stat-review-note">聊天记录 / 个人文件</small>
-        </div>
-      </article>
-      <article class="stat-card">
-        <div class="stat-icon blue">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.3"/><path d="M10 6v4.3l2.8 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <div class="stat-copy">
-          <span>最近扫描</span>
-          <strong id="stat-time">—</strong>
-          <small id="stat-duration">等待第一次扫描</small>
-        </div>
-      </article>
-    </section>
-
-    <section class="section why" id="why">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span></span> THE CATCH-ALL</div>
-          <h2>为什么它能吃掉上百 GB？</h2>
-        </div>
-        <p>
-          「系统数据」是 Finder 算不出来的部分：它包含用户 Library 里的应用容器、缓存与支持文件，
-          也包含虚拟内存、系统级数据。真正的原因通常非常具体。
-        </p>
-      </div>
-      <div class="insight-grid" id="insight-grid">
-        <article class="insight placeholder">
-          <span class="insight-index">01</span>
-          <h3>先扫描，才有答案</h3>
-          <p>不同 Mac 的「系统数据」来源完全不同，每次扫描都会把每一块占用标出来。</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section map-section">
-      <div class="card map-card">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow"><span></span> STORAGE MAP</div>
-            <h2>隐藏数据地图</h2>
+      <main class="app-content">
+        <section class="route-view" data-view="overview" id="view-overview">
+          <div class="view-head">
+            <div>
+              <div class="eyebrow"><span></span> OVERVIEW</div>
+              <h2>本机存储态势</h2>
+              <p>当前 Mac 的隐藏数据、可清理缓存和空间去向。</p>
+            </div>
+            <div class="scan-stamp" id="scan-meta">尚未扫描</div>
           </div>
-          <span class="muted" id="map-note">扫描后生成</span>
-        </div>
-        <div class="map-grid">
-          <div class="donut-column">
-            <div class="category-donut" id="category-donut">
-              <div class="donut-hole">
-                <span>隐藏数据</span>
-                <strong id="donut-total">—</strong>
-                <small>不含个人文件</small>
+
+          <div class="overview-grid">
+            <article class="card capacity-card">
+              <div class="card-head">
+                <div>
+                  <div class="eyebrow"><span></span> DISK</div>
+                  <h3>启动磁盘</h3>
+                </div>
+                <span class="host-chip" id="host-chip">Macintosh HD</span>
+              </div>
+              <div class="capacity-body">
+                <div class="disk-ring" id="disk-ring" style="--used: 0;">
+                  <div class="disk-ring-inner">
+                    <span class="disk-kicker">已使用</span>
+                    <strong id="disk-percent">—</strong>
+                    <span class="disk-caption" id="disk-caption">等待扫描</span>
+                  </div>
+                </div>
+                <div class="disk-legend">
+                  <div><span>总容量</span><strong id="disk-total">—</strong></div>
+                  <div><span>可用</span><strong id="disk-free">—</strong></div>
+                  <div><span>系统数据估算</span><strong id="disk-system">—</strong></div>
+                </div>
+              </div>
+              <div class="disk-footnote">
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.2"/><path d="M8 7.2v4M8 4.8v.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                Finder 的“系统数据”是分类残差，不是某个真实文件夹。
+              </div>
+            </article>
+
+            <article class="card map-card">
+              <div class="card-head">
+                <div>
+                  <div class="eyebrow"><span></span> STORAGE MAP</div>
+                  <h3>隐藏数据地图</h3>
+                </div>
+                <span class="muted" id="map-note">扫描后生成</span>
+              </div>
+              <div class="map-grid">
+                <div class="donut-column">
+                  <div class="category-donut" id="category-donut">
+                    <div class="donut-hole">
+                      <span>隐藏数据</span>
+                      <strong id="donut-total">—</strong>
+                      <small>不含个人文件</small>
+                    </div>
+                  </div>
+                </div>
+                <div class="map-details">
+                  <div class="stacked-bar" id="stacked-bar"><div class="stack-empty"></div></div>
+                  <div class="map-legend" id="map-legend"><span class="muted">等待扫描结果</span></div>
+                  <div class="map-footnote" id="map-footnote">按占用大小排序 · 每次扫描重新计算</div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <section class="stats" aria-label="扫描摘要">
+            <article class="stat-card">
+              <div class="stat-icon mint"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 6.5 10 3l7 3.5v7L10 17l-7-3.5v-7Z" stroke="currentColor" stroke-width="1.3"/><path d="M3 6.5 10 10l7-3.5M10 10v7" stroke="currentColor" stroke-width="1.3"/></svg></div>
+              <div class="stat-copy"><span>隐藏 / 系统数据</span><strong id="stat-hidden">—</strong><small id="stat-hidden-note">扫描后计算</small></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon green"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 13.5 8 9l2.5 2.3L16 5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10v5H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+              <div class="stat-copy"><span>可安全清理</span><strong id="stat-cleanable">—</strong><small id="stat-cleanable-note">白名单缓存</small></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon peach"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="7" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 16c.4-3 2.6-4.6 5.7-4.6 3.1 0 5.3 1.6 5.7 4.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M14.5 5.5v4M12.5 7.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+              <div class="stat-copy"><span>需要你确认</span><strong id="stat-review">—</strong><small id="stat-review-note">聊天记录 / 个人文件</small></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-icon blue"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.3"/><path d="M10 6v4.3l2.8 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <div class="stat-copy"><span>最近扫描</span><strong id="stat-time">—</strong><small id="stat-duration">等待第一次扫描</small></div>
+            </article>
+          </section>
+
+          <div class="split">
+            <article class="card top-card">
+              <div class="card-head">
+                <div><div class="eyebrow"><span></span> HEAVY HITTERS</div><h3>占用大头</h3></div>
+                <span class="tiny-badge">TOP 10</span>
+              </div>
+              <div class="top-list" id="top-list">
+                <div class="skeleton-list" aria-hidden="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+              </div>
+            </article>
+            <article class="card wins-card">
+              <div class="card-head"><div><div class="eyebrow"><span></span> QUICK WINS</div><h3>可回收空间</h3></div></div>
+              <div class="wins-total"><strong id="wins-total">—</strong><span>来自可重建缓存</span></div>
+              <div class="win-list" id="win-list"><p class="empty-copy">扫描后，这里会列出安全可清理的项目。</p></div>
+              <button class="btn btn-primary btn-wide" id="jump-clean" type="button">打开清理工作台</button>
+            </article>
+          </div>
+
+          <section class="insight-block">
+            <div class="block-head"><div><div class="eyebrow"><span></span> DIAGNOSIS</div><h3>为什么这么大</h3></div></div>
+            <div class="insight-grid" id="insight-grid">
+              <article class="insight placeholder"><span class="insight-index">01</span><h3>先扫描，才有答案</h3><p>每次扫描都会把本机每一块占用标出来。</p></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="route-view" data-view="clean" id="view-clean" hidden>
+          <div class="view-head">
+            <div>
+              <div class="eyebrow"><span></span> CLEANUP</div>
+              <h2>清理工作台</h2>
+              <p>只允许清理可重建缓存；聊天记录、Docker、VM 和个人文件只读展示。</p>
+            </div>
+            <div class="view-stat"><span>可安全清理</span><strong id="clean-summary">—</strong></div>
+          </div>
+
+          <div class="clean-toolbar card">
+            <div class="filter-group" id="risk-filters" role="group" aria-label="按风险筛选">
+              <button class="chip active" data-filter="safe" type="button">可安全清理 <span id="count-safe">0</span></button>
+              <button class="chip" data-filter="review" type="button">需人工确认 <span id="count-review">0</span></button>
+              <button class="chip" data-filter="all" type="button">全部 <span id="count-all">0</span></button>
+            </div>
+            <div class="toolbar-actions">
+              <button class="text-btn" id="select-all" type="button">全选可清理</button>
+              <button class="text-btn" id="clear-all" type="button">清空选择</button>
+            </div>
+          </div>
+
+          <div class="clean-groups" id="clean-groups">
+            <div class="empty-state card"><div class="empty-orbit"></div><h3>还没有扫描结果</h3><p>从启动台重新打开 App，或点击右上角「重新扫描」。</p></div>
+          </div>
+
+          <div class="selection-bar" id="selection-bar">
+            <div><span class="selection-label">已选择</span><strong id="selection-size">0 B</strong><span class="selection-count" id="selection-count">0 项</span></div>
+            <div class="selection-actions"><span class="permanent-warning">永久删除 · 不进废纸篓</span><button class="btn btn-danger" id="clean-selected" type="button" disabled>清理选中项</button></div>
+          </div>
+        </section>
+
+        <section class="route-view" data-view="history" id="view-history" hidden>
+          <div class="view-head">
+            <div>
+              <div class="eyebrow"><span></span> HISTORY</div>
+              <h2>扫描与清理记录</h2>
+              <p>分页读取历史；数据库离线时自动使用本地记录。</p>
+            </div>
+            <div class="history-head-actions">
+              <span class="source-chip" id="history-source">本地记录</span>
+              <button class="btn btn-ghost btn-small" id="refresh-history" type="button">刷新</button>
+            </div>
+          </div>
+
+          <div class="history-shell">
+            <div class="db-callout" id="db-callout" hidden>
+              <div><strong>PostgreSQL 历史库未连接</strong><p>扫描仍然可用，记录会先保存在本机。启动 Docker 数据库后，新记录会写入 PostgreSQL。</p></div>
+              <button class="btn btn-primary btn-small" id="start-db" type="button">启动历史数据库</button>
+            </div>
+            <div class="history-list" id="history-list">
+              <div class="empty-state card compact"><h3>暂无历史</h3><p>扫描和清理完成后，会在这里留下时间线。</p></div>
+            </div>
+            <div class="history-pager" id="history-pager" hidden>
+              <div class="history-count">共 <strong id="history-total">0</strong> 条记录 <span>· 摘要长期保留，最近 60 份完整报告可导出</span></div>
+              <div class="history-controls">
+                <label class="page-size">每页
+                  <select id="history-page-size"><option value="10">10 条</option><option value="25">25 条</option><option value="50">50 条</option></select>
+                </label>
+                <button class="pager-btn" id="history-prev" type="button">上一页</button>
+                <span class="page-indicator" id="history-page-indicator">1 / 1</span>
+                <button class="pager-btn" id="history-next" type="button">下一页</button>
               </div>
             </div>
           </div>
-          <div class="map-details">
-            <div class="stacked-bar" id="stacked-bar">
-              <div class="stack-empty"></div>
+        </section>
+
+        <section class="route-view" data-view="settings" id="view-settings" hidden>
+          <div class="view-head">
+            <div>
+              <div class="eyebrow"><span></span> SETTINGS</div>
+              <h2>设置与安全边界</h2>
+              <p>数据库、历史存储策略和允许清理的目录。</p>
             </div>
-            <div class="map-legend" id="map-legend">
-              <span class="muted">等待扫描结果</span>
-            </div>
-            <div class="map-footnote" id="map-footnote">
-              按占用大小排序 · 每次扫描重新计算
-            </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="section split">
-      <div class="card top-card">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow"><span></span> HEAVY HITTERS</div>
-            <h2>大头在哪里</h2>
+          <div class="settings-grid">
+            <article class="card settings-card">
+              <div class="card-head"><div><div class="eyebrow"><span></span> DATABASE</div><h3>历史数据库</h3></div><span class="status-dot" id="settings-db-dot"></span></div>
+              <p class="settings-copy">PostgreSQL 16 运行在本地 Docker Compose 中，只绑定 127.0.0.1。</p>
+              <div class="settings-rows">
+                <div><span>状态</span><strong id="settings-db-state">检测中</strong></div>
+                <div><span>地址</span><strong>127.0.0.1:55432</strong></div>
+                <div><span>数据库</span><strong>dsmac</strong></div>
+              </div>
+              <button class="btn btn-ghost btn-small" id="settings-start-db" type="button">启动 / 检查数据库</button>
+            </article>
+
+            <article class="card settings-card">
+              <div class="card-head"><div><div class="eyebrow"><span></span> STORAGE POLICY</div><h3>历史存储</h3></div></div>
+              <p class="settings-copy">历史分页读取；数据库保存精简摘要，完整报告文件有上限。</p>
+              <div class="settings-rows">
+                <div><span>分页</span><strong>10 / 25 / 50 条</strong></div>
+                <div><span>数据库摘要</span><strong>约 19KB / 次</strong></div>
+                <div><span>完整报告</span><strong>最近 60 份</strong></div>
+              </div>
+              <p class="settings-note">不会在后台定时扫描或自动清理；只有启动 App、手动重新扫描或确认清理时才会执行。</p>
+            </article>
+
+            <article class="card settings-card wide">
+              <div class="card-head"><div><div class="eyebrow"><span></span> SAFETY MODEL</div><h3>允许清理的目录</h3></div></div>
+              <p class="settings-copy">服务端只从持久化扫描报告中取路径，并二次检查白名单、符号链接、挂载点和真实路径。</p>
+              <div class="safety-strip">
+                <div><span>用户缓存</span><code>~/Library/Caches</code></div>
+                <div><span>诊断日志</span><code>~/Library/Logs/DiagnosticReports</code></div>
+                <div><span>开发缓存</span><code>~/Library/Developer/*/Caches</code></div>
+                <div><span>npm 缓存</span><code>~/.npm/_cacache</code></div>
+              </div>
+              <p class="settings-note">微信 / QQ 容器、Docker.raw、VM swap、Downloads、废纸篓永远只读。</p>
+            </article>
+
+            <article class="card settings-card">
+              <div class="card-head"><div><div class="eyebrow"><span></span> ABOUT</div><h3>DS 麦清理</h3></div></div>
+              <p class="settings-copy">本地运行、无遥测、无云端上传。</p>
+              <div class="settings-rows">
+                <div><span>版本</span><strong>v__DSMC_VERSION__</strong></div>
+                <div><span>服务</span><strong>127.0.0.1:8787</strong></div>
+                <div><span>扫描</span><strong>启动时 / 手动</strong></div>
+              </div>
+            </article>
           </div>
-          <span class="tiny-badge">TOP 10</span>
-        </div>
-        <div class="top-list" id="top-list">
-          <div class="skeleton-list" aria-hidden="true">
-            <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
-          </div>
-        </div>
-      </div>
-      <div class="card wins-card">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow"><span></span> QUICK WINS</div>
-            <h2>可以立刻回收</h2>
-          </div>
-        </div>
-        <div class="wins-total">
-          <strong id="wins-total">—</strong>
-          <span>来自可重建缓存</span>
-        </div>
-        <div class="win-list" id="win-list">
-          <p class="empty-copy">扫描后，这里会列出安全可清理的项目。</p>
-        </div>
-        <button class="btn btn-primary btn-wide" id="jump-clean" type="button">查看清理清单</button>
-      </div>
-    </section>
+        </section>
+      </main>
 
-    <section class="section clean-section" id="clean">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span></span> CONTROLLED CLEANUP</div>
-          <h2>选择要释放的空间</h2>
-        </div>
-        <p>
-          只有白名单里的可重建缓存可以勾选。聊天记录、Docker 虚拟磁盘、交换文件和个人文件永远只读展示。
-        </p>
-      </div>
-
-      <div class="clean-toolbar card">
-        <div class="filter-group" id="risk-filters" role="group" aria-label="按风险筛选">
-          <button class="chip active" data-filter="safe" type="button">可安全清理 <span id="count-safe">0</span></button>
-          <button class="chip" data-filter="review" type="button">需人工确认 <span id="count-review">0</span></button>
-          <button class="chip" data-filter="all" type="button">全部 <span id="count-all">0</span></button>
-        </div>
-        <div class="toolbar-actions">
-          <button class="text-btn" id="select-all" type="button">全选可清理</button>
-          <button class="text-btn" id="clear-all" type="button">清空选择</button>
-        </div>
-      </div>
-
-      <div class="clean-groups" id="clean-groups">
-        <div class="empty-state card">
-          <div class="empty-orbit"></div>
-          <h3>还没有扫描结果</h3>
-          <p>先跑一次只读扫描，才能看到本机真实的占用清单。</p>
-          <button class="btn btn-primary" id="scan-empty" type="button">开始扫描</button>
-        </div>
-      </div>
-
-      <div class="selection-bar" id="selection-bar">
-        <div>
-          <span class="selection-label">已选择</span>
-          <strong id="selection-size">0 B</strong>
-          <span class="selection-count" id="selection-count">0 项</span>
-        </div>
-        <div class="selection-actions">
-          <span class="permanent-warning">永久删除 · 不进废纸篓</span>
-          <button class="btn btn-danger" id="clean-selected" type="button" disabled>清理选中项</button>
-        </div>
-      </div>
-    </section>
-
-
-    <section class="section history-section" id="history">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span></span> LOCAL HISTORY</div>
-          <h2>每次扫描都有据可查</h2>
-        </div>
-        <div class="history-head-actions">
-          <span class="source-chip" id="history-source">本地记录</span>
-          <button class="btn btn-ghost btn-small" id="refresh-history" type="button">刷新</button>
-        </div>
-      </div>
-      <div class="history-shell">
-        <div class="db-callout" id="db-callout" hidden>
-          <div>
-            <strong>PostgreSQL 历史库未连接</strong>
-            <p>扫描仍然可用，记录会先保存在本机。启动 Docker 数据库后，新记录会写入 PostgreSQL。</p>
-          </div>
-          <button class="btn btn-primary btn-small" id="start-db" type="button">启动历史数据库</button>
-        </div>
-        <div class="history-list" id="history-list">
-          <div class="empty-state card compact">
-            <h3>暂无历史</h3>
-            <p>扫描和清理完成后，会在这里留下时间线。</p>
-          </div>
-        </div>
-        <div class="history-pager" id="history-pager" hidden>
-          <div class="history-count">
-            共 <strong id="history-total">0</strong> 条记录
-            <span>· 摘要长期保留，最近 60 份完整报告可导出</span>
-          </div>
-          <div class="history-controls">
-            <label class="page-size">每页
-              <select id="history-page-size">
-                <option value="10">10 条</option>
-                <option value="25">25 条</option>
-                <option value="50">50 条</option>
-              </select>
-            </label>
-            <button class="pager-btn" id="history-prev" type="button">上一页</button>
-            <span class="page-indicator" id="history-page-indicator">1 / 1</span>
-            <button class="pager-btn" id="history-next" type="button">下一页</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section method-section" id="method">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span></span> SAFETY MODEL</div>
-          <h2>它为什么会“敢”删？</h2>
-        </div>
-        <p>不是因为它知道得更多，而是因为它允许自己做的事情很少。</p>
-      </div>
-      <div class="method-grid">
-        <article class="method-card">
-          <span class="method-number">01</span>
-          <h3>只读扫描，默认不动</h3>
-          <p>扫描只调用 du 和系统信息命令；没有任何删除动作。你必须手动勾选、输入确认词才会执行。</p>
-        </article>
-        <article class="method-card">
-          <span class="method-number">02</span>
-          <h3>路径白名单 + 二次校验</h3>
-          <p>删除时只接受缓存根目录内的路径。服务端从扫描报告取路径，重新检查符号链接、挂载点和真实路径。</p>
-        </article>
-        <article class="method-card">
-          <span class="method-number">03</span>
-          <h3>不碰聊天记录与个人文件</h3>
-          <p>微信、QQ、Docker.raw、VM swap、Downloads、废纸篓全部只读。聊天 App 请使用它们自己的存储管理。</p>
-        </article>
-        <article class="method-card">
-          <span class="method-number">04</span>
-          <h3>每个动作都留痕</h3>
-          <p>扫描报告与清理结果写入本地 JSONL，并可同步到 Docker 中的 PostgreSQL；历史库离线也不影响清理。</p>
-        </article>
-      </div>
-      <div class="safety-strip">
-        <div><span>可删除根目录</span><code>~/Library/Caches</code></div>
-        <div><span>诊断日志</span><code>~/Library/Logs/DiagnosticReports</code></div>
-        <div><span>开发缓存</span><code>~/Library/Developer/*/Caches</code></div>
-        <div><span>npm 缓存</span><code>~/.npm/_cacache</code></div>
-      </div>
-    </section>
-
-    <section class="closing">
-      <p>“系统数据”不是敌人，命名不清才是。</p>
-      <span>DS Mac Cleaner · v__DSMC_VERSION__ · 100% local, no telemetry</span>
-    </section>
-  </main>
-
-  <footer>
-    <span>为 macOS 15 打造 · 127.0.0.1 本地运行 · 无云端上传</span>
-    <span>清缓存有风险，重要数据请先备份。</span>
-  </footer>
-
-  <div class="scan-overlay" id="scan-overlay" hidden>
-    <div class="scan-panel">
-      <div class="scan-orbit">
-        <svg class="scan-ring" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="52" class="track"/>
-          <circle cx="60" cy="60" r="52" class="progress" id="scan-ring-progress"/>
-        </svg>
-        <div class="scan-center" id="scan-percent">0<span>%</span></div>
-      </div>
-      <div class="eyebrow"><span></span> READ-ONLY SCAN</div>
-      <h2 id="scan-stage">正在读取磁盘信息…</h2>
-      <p>正在统计隐藏目录。首次扫描通常需要 30–60 秒，不会修改任何文件。</p>
-      <div class="scan-skeleton"><span></span><span></span><span></span></div>
-      <button class="btn btn-ghost btn-small scan-cancel" id="scan-cancel" type="button">中断扫描</button>
+      <footer class="app-footer">
+        <span>DS Mac Cleaner · 本地运行 · 无云端上传</span>
+        <span>清缓存有风险，重要数据请先备份。</span>
+      </footer>
     </div>
   </div>
 
   <dialog class="confirm-dialog" id="confirm-dialog">
     <form method="dialog" class="dialog-card" id="confirm-form">
       <button class="dialog-close" type="button" id="dialog-close" aria-label="关闭">×</button>
-      <div class="dialog-icon">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v5M12 17.2v.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </div>
+      <div class="dialog-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v5M12 17.2v.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
       <div class="eyebrow"><span></span> PERMANENT DELETE</div>
       <h2>确认永久删除缓存？</h2>
       <p class="dialog-lede">将释放 <strong id="dialog-size">—</strong>，共 <strong id="dialog-count">0</strong> 项。文件不会进入废纸篓，无法在 Finder 中撤销。</p>
@@ -399,21 +341,9 @@
       <label class="confirm-label" for="confirm-word">输入 <code>DELETE</code> 以继续</label>
       <input class="confirm-input" id="confirm-word" type="text" autocomplete="off" spellcheck="false" placeholder="DELETE">
       <div class="dialog-error" id="dialog-error" hidden></div>
-      <div class="dialog-actions">
-        <button class="btn btn-ghost" type="button" id="dialog-cancel">取消</button>
-        <button class="btn btn-danger" type="submit" id="dialog-confirm" disabled>永久清理</button>
-      </div>
+      <div class="dialog-actions"><button class="btn btn-ghost" type="button" id="dialog-cancel">取消</button><button class="btn btn-danger" type="submit" id="dialog-confirm" disabled>永久清理</button></div>
     </form>
   </dialog>
-
-  <div class="refresh-toast" id="refresh-toast" hidden>
-    <span class="refresh-spinner"></span>
-    <div>
-      <strong>正在刷新报告</strong>
-      <span id="refresh-text">读取上次结果后自动扫描…</span>
-    </div>
-    <button class="refresh-cancel" id="refresh-cancel" type="button">中断</button>
-  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite">
     <span class="toast-mark"></span>
