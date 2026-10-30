@@ -321,6 +321,7 @@ open "/Applications/DS Mac Cleaner.app"
 **如何卸载？**
 
 ```bash
+./scripts/uninstall-agent.sh
 rm -rf "/Applications/DS Mac Cleaner.app"
 docker compose down            # 保留数据卷
 docker compose down -v         # 同时删除历史数据，谨慎
