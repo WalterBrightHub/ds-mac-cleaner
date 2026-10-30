@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -137,8 +138,26 @@ def du_one(path: Path, timeout: int = 180) -> int:
         return 0
 
 
-def du_many(paths: Iterable[Path], timeout: int = 240) -> Dict[str, int]:
-    """Measure many paths in one du call. Keyed by the exact path string."""
+def _parse_du_output(out: str, result: Dict[str, int]) -> None:
+    if not out:
+        return
+    for line in out.splitlines():
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        try:
+            result[parts[1]] = max(0, int(parts[0].strip())) * 1024
+        except ValueError:
+            continue
+
+
+def du_many(paths: Iterable[Path], timeout: int = 240,
+            cancel_event=None) -> Dict[str, int]:
+    """Measure many paths in one du call. Keyed by the exact path string.
+
+    The du subprocess is polled so a scan can cancel promptly; when cancelled,
+    the partial result is returned and the caller discards the scan.
+    """
     usable: List[str] = []
     for path in paths:
         if path.exists() or path.is_symlink():
@@ -149,17 +168,47 @@ def du_many(paths: Iterable[Path], timeout: int = 240) -> Dict[str, int]:
     result: Dict[str, int] = {}
     chunk_size = 80
     for start in range(0, len(usable), chunk_size):
+        if cancel_event is not None and cancel_event.is_set():
+            return result
         chunk = usable[start:start + chunk_size]
-        code, out, _ = run(["du", "-skx", "--"] + chunk, timeout=timeout)
-        if out:
-            for line in out.splitlines():
-                parts = line.split("\t", 1)
-                if len(parts) != 2:
-                    continue
+        try:
+            proc = subprocess.Popen(
+                ["du", "-skx", "--"] + chunk,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="replace",
+            )
+        except OSError:
+            continue
+        deadline = time.time() + timeout
+        out = ""
+        try:
+            while True:
                 try:
-                    result[parts[1]] = max(0, int(parts[0].strip())) * 1024
-                except ValueError:
-                    continue
+                    out, _ = proc.communicate(timeout=0.25)
+                    break
+                except subprocess.TimeoutExpired:
+                    if cancel_event is not None and cancel_event.is_set():
+                        proc.terminate()
+                        try:
+                            out, _ = proc.communicate(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            proc.communicate()
+                        return result
+                    if time.time() > deadline:
+                        proc.kill()
+                        proc.communicate()
+                        break
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                try:
+                    proc.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    pass
+        _parse_du_output(out, result)
     return result
 
 

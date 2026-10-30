@@ -34,7 +34,7 @@ mkdir -p "$LOG_DIR"
 } >> "$LOG" 2>&1
 
 if curl -fsS --max-time 1 "$HEALTH" >/dev/null 2>&1; then
-  open "http://127.0.0.1:${PORT}/"
+  open "http://127.0.0.1:${PORT}/?launch=1"
   exit 0
 fi
 
@@ -48,7 +48,7 @@ SERVER_PID=$!
 
 for _ in $(seq 1 80); do
   if curl -fsS --max-time 1 "$HEALTH" >/dev/null 2>&1; then
-    open "http://127.0.0.1:${PORT}/"
+    open "http://127.0.0.1:${PORT}/?launch=1"
     exit 0
   fi
   sleep 0.25

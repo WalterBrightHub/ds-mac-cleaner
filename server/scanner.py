@@ -5,6 +5,7 @@ import concurrent.futures
 import os
 import platform
 import socket
+import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -53,9 +54,13 @@ def _children(root: Path) -> List[Path]:
     return result
 
 
-def _scan_children(root: Path) -> Tuple[int, List[dict]]:
+class ScanCancelled(Exception):
+    pass
+
+
+def _scan_children(root: Path, cancel_event=None) -> Tuple[int, List[dict]]:
     children = _children(root)
-    sizes = du_many(children, timeout=240)
+    sizes = du_many(children, timeout=240, cancel_event=cancel_event)
     rows = []
     total = 0
     for path in children:
@@ -187,7 +192,12 @@ def _recommendations(items: List[dict]) -> List[dict]:
     return recs
 
 
-def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
+def run_scan(progress: Optional[Callable[[int, str], None]] = None,
+             cancel_event: Optional[threading.Event] = None) -> dict:
+    def check_cancel() -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise ScanCancelled("scan cancelled")
+
     def report_progress(pct: int, stage: str) -> None:
         if progress:
             try:
@@ -196,6 +206,7 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
                 pass
 
     started = time.time()
+    check_cancel()
     report_progress(3, "读取磁盘与系统信息")
     host = _host_info()
     disk = disk_usage(Path("/System/Volumes/Data"))
@@ -214,6 +225,7 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
             paths.append(p)
             seen.add(str(p))
 
+    check_cancel()
     report_progress(10, "正在测量应用容器、缓存与应用数据（只读）")
     measured: Dict[str, int] = {}
     child_rows: Dict[str, List[dict]] = {}
@@ -222,10 +234,10 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         futures = {
-            pool.submit(_scan_children, ROOTS["containers"]): "containers",
-            pool.submit(_scan_children, ROOTS["appsupport"]): "appsupport",
-            pool.submit(_scan_children, ROOTS["caches"]): "caches",
-            pool.submit(du_many, paths, 240): "fixed",
+            pool.submit(_scan_children, ROOTS["containers"], cancel_event): "containers",
+            pool.submit(_scan_children, ROOTS["appsupport"], cancel_event): "appsupport",
+            pool.submit(_scan_children, ROOTS["caches"], cancel_event): "caches",
+            pool.submit(du_many, paths, 240, cancel_event): "fixed",
         }
         done = 0
         for future in concurrent.futures.as_completed(futures):
@@ -236,6 +248,7 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
             except Exception as exc:  # a single failed subtree must not fail scan
                 errors.append(f"{key}: {exc}")
                 result = (0, []) if key != "fixed" else {}
+            check_cancel()
             if key == "fixed":
                 fixed_sizes = result
             else:
@@ -251,6 +264,7 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
             }
             report_progress(pct, f"已完成 {labels.get(key, key)}，继续测量…")
 
+    check_cancel()
     for root in ("containers", "appsupport", "caches"):
         if root not in measured:
             measured[root] = 0
@@ -290,6 +304,7 @@ def run_scan(progress: Optional[Callable[[int, str], None]] = None) -> dict:
         for i in top
     ]
 
+    check_cancel()
     report_progress(90, "生成解释与建议")
     finished = time.time()
     report = {

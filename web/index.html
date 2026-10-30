@@ -382,6 +382,7 @@
       <h2 id="scan-stage">正在读取磁盘信息…</h2>
       <p>正在统计隐藏目录。首次扫描通常需要 30–60 秒，不会修改任何文件。</p>
       <div class="scan-skeleton"><span></span><span></span><span></span></div>
+      <button class="btn btn-ghost btn-small scan-cancel" id="scan-cancel" type="button">中断扫描</button>
     </div>
   </div>
 
@@ -411,6 +412,7 @@
       <strong>正在刷新报告</strong>
       <span id="refresh-text">读取上次结果后自动扫描…</span>
     </div>
+    <button class="refresh-cancel" id="refresh-cancel" type="button">中断</button>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite">

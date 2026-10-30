@@ -27,13 +27,13 @@ if __package__ in (None, ""):
     from server import config  # type: ignore
     from server.cleanup import CleanupError, permission_probe, run_cleanup  # type: ignore
     from server.history import HistoryStore  # type: ignore
-    from server.scanner import run_scan  # type: ignore
+    from server.scanner import ScanCancelled, run_scan  # type: ignore
     from server.util import atomic_write_json, read_json, run  # type: ignore
 else:
     from . import config
     from .cleanup import CleanupError, permission_probe, run_cleanup
     from .history import HistoryStore
-    from .scanner import run_scan
+    from .scanner import ScanCancelled, run_scan
     from .util import atomic_write_json, read_json, run
 
 TOKEN = secrets.token_urlsafe(28)
@@ -73,6 +73,7 @@ class TaskManager:
         self._lock = threading.Lock()
         self._tasks: Dict[str, dict] = {}
         self._active_scan: Optional[str] = None
+        self._cancel_events: Dict[str, threading.Event] = {}
 
     def _new_task(self, kind: str, trigger: str = "manual") -> dict:
         task_id = f"task-{int(time.time())}-{secrets.token_hex(4)}"
@@ -120,18 +121,53 @@ class TaskManager:
                 if task and task["status"] == "running":
                     return dict(task)
         task = self._new_task("scan", trigger=trigger)
+        cancel_event = threading.Event()
         with self._lock:
             self._active_scan = task["id"]
-        thread = threading.Thread(target=self._run_scan, args=(task,), daemon=True, name="dsmc-scan")
+            self._cancel_events[task["id"]] = cancel_event
+        thread = threading.Thread(
+            target=self._run_scan, args=(task, cancel_event), daemon=True, name="dsmc-scan",
+        )
         thread.start()
         return dict(task)
 
-    def _run_scan(self, task: dict) -> None:
+    def cancel_scan(self, task_id: Optional[str] = None) -> Optional[dict]:
+        with self._lock:
+            active_id = self._active_scan
+            if not active_id or (task_id and task_id != active_id):
+                return None
+            task = self._tasks.get(active_id)
+            event = self._cancel_events.get(active_id)
+            if not task or task.get("status") != "running":
+                return None
+            if event is not None:
+                event.set()
+            task["cancel_requested"] = True
+            task["stage"] = "正在中断扫描…"
+            return dict(task)
+
+    def _prune_scan_reports(self, keep: int = 60) -> None:
+        """Keep history summaries in the DB but bound full JSON report files."""
+        try:
+            files = sorted(
+                config.SCANS_DIR.glob("scan-*.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            for old in files[keep:]:
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        except OSError:
+            pass
+
+    def _run_scan(self, task: dict, cancel_event: threading.Event) -> None:
         def progress(pct: int, stage: str) -> None:
             self._update(task, progress=max(1, min(99, pct)), stage=stage)
 
         try:
-            report = run_scan(progress)
+            report = run_scan(progress, cancel_event)
             report["trigger"] = task.get("trigger", "manual")
             config.SCANS_DIR.mkdir(parents=True, exist_ok=True)
             atomic_write_json(config.SCANS_DIR / f"{report['id']}.json", report)
@@ -142,6 +178,9 @@ class TaskManager:
             except Exception:
                 pass
             self._update(task, status="done", progress=100, stage="扫描完成", result=report)
+        except ScanCancelled:
+            self._update(task, status="cancelled", progress=100, stage="扫描已中断",
+                         error=None, result=None)
         except Exception as exc:
             self._update(task, status="error", progress=100, stage="扫描失败",
                          error=f"{exc.__class__.__name__}: {exc}")
@@ -149,6 +188,7 @@ class TaskManager:
             with self._lock:
                 if self._active_scan == task["id"]:
                     self._active_scan = None
+                self._cancel_events.pop(task["id"], None)
 
     def start_cleanup(self, report: dict, item_ids, dry_run: bool = False) -> dict:
         task = self._new_task("cleanup", trigger="manual")
@@ -192,22 +232,6 @@ class App:
             return None
         report["age_seconds"] = max(0, int(time.time() - float(report.get("started_at", time.time()))))
         return report
-
-    def _prune_scan_reports(self, keep: int = 60) -> None:
-        """Keep history summaries in the DB but bound full JSON report files."""
-        try:
-            files = sorted(
-                config.SCANS_DIR.glob("scan-*.json"),
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
-            for old in files[keep:]:
-                try:
-                    old.unlink()
-                except OSError:
-                    pass
-        except OSError:
-            pass
 
     def get_scan(self, scan_id: str) -> Optional[dict]:
         if not SCAN_ID_RE.match(scan_id or ""):
@@ -358,6 +382,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/db/status":
             self._json({"ok": True, "db": APP.history.status()})
             return
+        if path == "/api/scans/active":
+            self._json({"ok": True, "task": APP.tasks.active_scan()})
+            return
         if path == "/api/permissions":
             checks = permission_probe()
             self._json({
@@ -439,6 +466,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urllib.parse.urlparse(self.path).path
         try:
+            if path.startswith("/api/scans/") and path.endswith("/cancel"):
+                task_id = path[len("/api/scans/"):-len("/cancel")]
+                if not TASK_ID_RE.match(task_id):
+                    self._error(404, "扫描任务不存在")
+                    return
+                task = APP.tasks.cancel_scan(task_id)
+                if not task:
+                    self._error(409, "没有可中断的扫描")
+                    return
+                self._json({"ok": True, "task": task}, 202)
+                return
             if path == "/api/scans":
                 data = self._read_json()
                 trigger = data.get("trigger", "manual")

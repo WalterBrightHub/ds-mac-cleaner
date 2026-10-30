@@ -26,6 +26,7 @@
     expanded: new Set(),
     filter: "safe",
     scanning: false,
+    scanTaskId: null,
     cleaning: false,
     db: null,
     history: null,
@@ -55,8 +56,23 @@
     } catch (err) {
       toast("读取报告失败", err.message || String(err), "error");
     }
-    // This product scans when the user opens the app, not on a background timer.
-    startScan(true);
+    const params = new URLSearchParams(location.search);
+    const launchedFromApp = params.get("launch") === "1";
+    if (launchedFromApp) {
+      history.replaceState(null, "", location.pathname + location.hash);
+    }
+    try {
+      const active = await api("/api/scans/active");
+      if (active.task) {
+        // A refresh during a scan must attach, never start a second scan.
+        attachScan(active.task, Boolean(state.scan));
+      } else if (launchedFromApp) {
+        // Only a Launchpad/app open starts a scan; a normal refresh does not.
+        startScan(true);
+      }
+    } catch (err) {
+      if (launchedFromApp) toast("无法启动扫描", err.message || String(err), "error");
+    }
     loadHistory(1);
     setInterval(refreshRelativeTimes, 30000);
   }
@@ -67,6 +83,8 @@
     el.scanPercent = $("#scan-percent");
     el.scanRing = $("#scan-ring-progress");
     el.scanMeta = $("#scan-meta");
+    el.scanCancel = $("#scan-cancel");
+    el.refreshCancel = $("#refresh-cancel");
     el.scanBtn = $("#scan-btn");
     el.rescanTop = $("#rescan-top");
     el.dbPill = $("#db-pill");
@@ -127,6 +145,8 @@
     $("#select-all").addEventListener("click", selectAllSafe);
     $("#clear-all").addEventListener("click", clearSelection);
     $("#clean-selected").addEventListener("click", openConfirm);
+    el.scanCancel.addEventListener("click", cancelScan);
+    el.refreshCancel.addEventListener("click", cancelScan);
 
     el.riskFilters.addEventListener("click", (event) => {
       const chip = event.target.closest(".chip[data-filter]");
@@ -196,20 +216,38 @@
   // --------------------------------------------------------------- scanning --
   async function startScan(auto, silent = Boolean(state.scan)) {
     if (state.scanning || state.cleaning) return;
+    try {
+      const res = await api("/api/scans", {
+        method: "POST",
+        body: { trigger: auto ? "launch" : "manual" },
+      });
+      if (!res.task) throw new Error("服务器没有返回扫描任务");
+      await attachScan(res.task, silent);
+    } catch (err) {
+      toast("扫描失败", err.message || String(err), "error");
+    }
+  }
+
+  async function attachScan(task, silent = Boolean(state.scan)) {
+    if (state.scanning && state.scanTaskId && state.scanTaskId !== task.id) return;
     state.scanning = true;
+    state.scanTaskId = task.id;
     el.scanBtn.disabled = true;
     el.rescanTop.disabled = true;
+    el.scanCancel.disabled = false;
+    el.refreshCancel.disabled = false;
+    el.scanCancel.textContent = "中断扫描";
     if (silent) {
       el.refreshToast.hidden = false;
       el.refreshText.textContent = "正在准备只读扫描…";
     } else {
       el.scanOverlay.hidden = false;
       document.body.classList.add("locked");
-      setScanProgress(1, "准备只读扫描…");
+      setScanProgress(task.progress || 1, task.stage || "准备只读扫描…");
     }
-    const showProgress = (task) => {
-      const pct = task.progress || 0;
-      const stage = task.stage || "扫描中…";
+    const showProgress = (current) => {
+      const pct = current.progress || 0;
+      const stage = current.stage || "扫描中…";
       if (silent) {
         el.refreshText.textContent = `${stage} · ${pct}%`;
       } else {
@@ -217,27 +255,48 @@
       }
     };
     try {
-      const res = await api("/api/scans", {
-        method: "POST",
-        body: { trigger: auto ? "launch" : "manual" },
-      });
-      if (!res.task) throw new Error("服务器没有返回扫描任务");
-      await pollTask(res.task.id, showProgress, (task) => {
-        if (task.status === "error") throw new Error(task.error || "扫描失败");
-        applyScan(task.result);
-        toast("扫描完成", `已分析 ${task.result.summary.item_count} 项，只读扫描没有修改任何文件。`);
+      await pollTask(task.id, showProgress, (current) => {
+        if (current.status === "cancelled") {
+          toast("扫描已中断", "上次报告保持不变，你可以随时重新扫描。");
+          return;
+        }
+        if (current.status === "error") throw new Error(current.error || "扫描失败");
+        applyScan(current.result);
+        toast("扫描完成", `已分析 ${current.result.summary.item_count} 项，只读扫描没有修改任何文件。`);
         loadHistory(1);
       });
     } catch (err) {
       toast("扫描失败", err.message || String(err), "error");
     } finally {
       state.scanning = false;
+      state.scanTaskId = null;
       el.scanBtn.disabled = false;
       el.rescanTop.disabled = false;
       await sleep(260);
       el.scanOverlay.hidden = true;
       el.refreshToast.hidden = true;
+      el.scanCancel.disabled = false;
+      el.refreshCancel.disabled = false;
+      el.scanCancel.textContent = "中断扫描";
       document.body.classList.remove("locked");
+    }
+  }
+
+  async function cancelScan() {
+    if (!state.scanTaskId) return;
+    el.scanCancel.disabled = true;
+    el.refreshCancel.disabled = true;
+    el.scanCancel.textContent = "正在中断…";
+    try {
+      await api(`/api/scans/${encodeURIComponent(state.scanTaskId)}/cancel`, {
+        method: "POST",
+        body: {},
+      });
+    } catch (err) {
+      toast("无法中断扫描", err.message || String(err), "error");
+      el.scanCancel.disabled = false;
+      el.refreshCancel.disabled = false;
+      el.scanCancel.textContent = "中断扫描";
     }
   }
 
@@ -249,11 +308,7 @@
         failures = 0;
         const task = res.task;
         onUpdate(task);
-        if (task.status === "done") {
-          onDone(task);
-          return task;
-        }
-        if (task.status === "error") {
+        if (["done", "error", "cancelled"].includes(task.status)) {
           onDone(task);
           return task;
         }

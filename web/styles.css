@@ -1180,3 +1180,18 @@ footer {
   .history-count span { display: block; margin-top: 3px; }
   .history-controls { width: 100%; justify-content: space-between; }
 }
+
+.scan-cancel { margin-top: 20px; }
+.refresh-cancel {
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: auto;
+  flex: none;
+}
+.refresh-cancel:hover { color: var(--danger); border-color: #edcfc8; }
+.refresh-toast > div { min-width: 0; }
