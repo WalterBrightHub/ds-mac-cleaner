@@ -29,10 +29,6 @@
     cleaning: false,
     db: null,
     history: null,
-    settings: null,
-    automation: null,
-    agent: null,
-    settingsDirty: false,
   };
 
   const el = {};
@@ -53,16 +49,14 @@
       const latest = await api("/api/latest");
       if (latest.scan) {
         applyScan(latest.scan);
-      } else {
-        startScan(true);
       }
     } catch (err) {
       toast("读取报告失败", err.message || String(err), "error");
     }
-    loadAutomation();
+    // This product scans when the user opens the app, not on a background timer.
+    startScan(true);
     loadHistory();
     setInterval(refreshRelativeTimes, 30000);
-    setInterval(backgroundRefresh, 30000);
   }
 
   function cacheElements() {
@@ -93,6 +87,8 @@
     el.historySource = $("#history-source");
     el.dbCallout = $("#db-callout");
     el.toast = $("#toast");
+    el.refreshToast = $("#refresh-toast");
+    el.refreshText = $("#refresh-text");
     el.toastTitle = $("#toast-title");
     el.toastBody = $("#toast-body");
     el.dialog = $("#confirm-dialog");
@@ -103,22 +99,6 @@
     el.dialogSize = $("#dialog-size");
     el.dialogCount = $("#dialog-count");
     el.dialogList = $("#dialog-list");
-    el.automationForm = $("#automation-form");
-    el.scanEnabled = $("#scan-enabled");
-    el.scanFrequency = $("#scan-frequency");
-    el.scanTime = $("#scan-time");
-    el.weekdayField = $("#weekday-field");
-    el.weekdayPicker = $("#weekday-picker");
-    el.autoCleanEnabled = $("#auto-clean-enabled");
-    el.autoThreshold = $("#auto-threshold");
-    el.autoMax = $("#auto-max");
-    el.autoInterval = $("#auto-interval");
-    el.historyDays = $("#history-days");
-    el.settingsState = $("#settings-state");
-    el.formHint = $("#form-hint");
-    el.agentDot = $("#agent-dot");
-    el.installAgent = $("#install-agent");
-    el.uninstallAgent = $("#uninstall-agent");
   }
 
   function bindEvents() {
@@ -179,25 +159,7 @@
     });
     $("#toast-close").addEventListener("click", hideToast);
 
-    el.automationForm.addEventListener("submit", saveSettings);
-    el.scanFrequency.addEventListener("change", () => {
-      syncScheduleUI();
-      markSettingsDirty();
-    });
-    [el.scanEnabled, el.scanTime, el.autoCleanEnabled, el.autoThreshold,
-      el.autoMax, el.autoInterval, el.historyDays].forEach((input) => {
-      input.addEventListener("change", markSettingsDirty);
-      input.addEventListener("input", markSettingsDirty);
-    });
-    el.weekdayPicker.addEventListener("click", (event) => {
-      const day = event.target.closest("button[data-day]");
-      if (!day) return;
-      day.classList.toggle("active");
-      markSettingsDirty();
-    });
-    $("#install-agent").addEventListener("click", installAgent);
-    $("#uninstall-agent").addEventListener("click", uninstallAgent);
-  }
+}
 
   // ------------------------------------------------------------------ API ---
   async function api(path, options = {}) {
@@ -218,18 +180,35 @@
   }
 
   // --------------------------------------------------------------- scanning --
-  async function startScan(auto) {
+  async function startScan(auto, silent = Boolean(state.scan)) {
     if (state.scanning || state.cleaning) return;
     state.scanning = true;
-    el.scanOverlay.hidden = false;
-    document.body.classList.add("locked");
-    setScanProgress(1, "准备只读扫描…");
+    el.scanBtn.disabled = true;
+    el.rescanTop.disabled = true;
+    if (silent) {
+      el.refreshToast.hidden = false;
+      el.refreshText.textContent = "正在准备只读扫描…";
+    } else {
+      el.scanOverlay.hidden = false;
+      document.body.classList.add("locked");
+      setScanProgress(1, "准备只读扫描…");
+    }
+    const showProgress = (task) => {
+      const pct = task.progress || 0;
+      const stage = task.stage || "扫描中…";
+      if (silent) {
+        el.refreshText.textContent = `${stage} · ${pct}%`;
+      } else {
+        setScanProgress(pct, stage);
+      }
+    };
     try {
-      const res = await api("/api/scans", { method: "POST", body: {} });
+      const res = await api("/api/scans", {
+        method: "POST",
+        body: { trigger: auto ? "launch" : "manual" },
+      });
       if (!res.task) throw new Error("服务器没有返回扫描任务");
-      await pollTask(res.task.id, (task) => {
-        setScanProgress(task.progress || 0, task.stage || "扫描中…");
-      }, (task) => {
+      await pollTask(res.task.id, showProgress, (task) => {
         if (task.status === "error") throw new Error(task.error || "扫描失败");
         applyScan(task.result);
         toast("扫描完成", `已分析 ${task.result.summary.item_count} 项，只读扫描没有修改任何文件。`);
@@ -239,11 +218,13 @@
       toast("扫描失败", err.message || String(err), "error");
     } finally {
       state.scanning = false;
+      el.scanBtn.disabled = false;
+      el.rescanTop.disabled = false;
       await sleep(260);
       el.scanOverlay.hidden = true;
+      el.refreshToast.hidden = true;
       document.body.classList.remove("locked");
     }
-    if (auto) return;
   }
 
   async function pollTask(taskId, onUpdate, onDone) {
@@ -456,7 +437,6 @@
           <div class="item-title-line">
             <span class="item-title">${esc(item.label)}</span>
             <span class="risk-tag ${riskClass}">${riskText}</span>
-            ${item.auto_clean ? '<span class="risk-tag auto-label">AUTO</span>' : ""}
           </div>
           <p class="item-desc">${esc(item.description)}</p>
           <div class="item-path" title="${esc(item.path)}">${esc(item.display_path)}</div>
@@ -560,7 +540,7 @@
       state.selected.clear();
       updateSelection();
       await sleep(900);
-      startScan(true);
+      startScan(false);
     } catch (err) {
       state.cleaning = false;
       el.dialogError.textContent = err.message || String(err);
@@ -569,226 +549,6 @@
       el.dialogConfirm.disabled = el.confirmWord.value !== "DELETE";
       updateSelection();
     }
-  }
-
-  // ------------------------------------------------------------- automation --
-  async function loadAutomation() {
-    try {
-      const data = await api("/api/automation");
-      applyAutomation(data, false);
-    } catch (err) {
-      $("#next-scan").textContent = "不可用";
-      $("#next-scan-note").textContent = err.message || String(err);
-    }
-  }
-
-  function applyAutomation(data, preserveForm) {
-    if (!data || !data.settings) return;
-    state.settings = data.settings;
-    state.automation = data.automation;
-    state.agent = data.agent;
-    const scan = data.settings.scan || {};
-    const auto = data.settings.auto_clean || {};
-
-    if (!preserveForm) {
-      el.scanEnabled.checked = Boolean(scan.enabled);
-      el.scanFrequency.value = scan.frequency === "weekly" ? "weekly" : "daily";
-      el.scanTime.value = scan.time || "03:00";
-      const days = new Set((scan.weekdays || []).map(Number));
-      $$("button[data-day]", el.weekdayPicker).forEach((button) => {
-        button.classList.toggle("active", days.has(Number(button.dataset.day)));
-      });
-      el.autoCleanEnabled.checked = Boolean(auto.enabled);
-      el.autoThreshold.value = auto.only_below_free_gb ?? 25;
-      el.autoMax.value = auto.max_total_gb ?? 20;
-      el.autoInterval.value = auto.min_interval_hours ?? 24;
-      el.historyDays.value = data.settings.history_retention_days ?? 180;
-      state.settingsDirty = false;
-      el.settingsState.textContent = "已同步";
-      el.settingsState.style.color = "";
-      el.formHint.textContent = "设置只保存在本机。";
-      el.formHint.classList.remove("saved");
-    }
-    syncScheduleUI();
-    renderAutomationStatus(data);
-    renderAgent(data.agent || {});
-  }
-
-  function renderAutomationStatus(data) {
-    const automation = data.automation || {};
-    const scan = automation.scan || {};
-    const auto = automation.auto_clean || {};
-    if (scan.enabled && scan.next_at) {
-      $("#next-scan").textContent = formatDate(scan.next_at);
-      $("#next-scan-note").textContent = scan.frequency === "weekly" ? "每周计划" : "每日计划";
-      $("#next-scan").className = "on";
-    } else {
-      $("#next-scan").textContent = "已关闭";
-      $("#next-scan-note").textContent = "开启定时扫描后生效";
-      $("#next-scan").className = "off";
-    }
-
-    $("#auto-state").textContent = auto.enabled ? "已开启" : "默认关闭";
-    $("#auto-state").className = auto.enabled ? "on" : "off";
-    $("#auto-state-note").textContent = auto.enabled
-      ? `低于 ${auto.only_below_free_gb} GB 时，最多 ${auto.max_total_gb} GB / 次`
-      : "只做扫描，不自动删除";
-
-    const last = auto.last_result;
-    if (last && last.at) {
-      $("#last-auto").textContent = last.freed_bytes
-        ? `+${fmt(last.freed_bytes)}`
-        : (last.error_count ? "部分失败" : "已检查");
-      $("#last-auto").className = last.freed_bytes ? "on" : "off";
-      $("#last-auto-note").textContent = `${formatDate(last.at)} · ${last.reason || (last.item_count ? `${last.item_count} 项` : "无可清理项")}`;
-    } else if (auto.last_at) {
-      $("#last-auto").textContent = "已执行";
-      $("#last-auto-note").textContent = formatDate(auto.last_at);
-      $("#last-auto").className = "on";
-    } else {
-      $("#last-auto").textContent = "—";
-      $("#last-auto-note").textContent = "还没有自动清理记录";
-      $("#last-auto").className = "off";
-    }
-
-    $("#agent-state").textContent = data.agent?.installed ? "已安装" : "未安装";
-    $("#agent-state").className = data.agent?.installed ? "on" : "off";
-    $("#agent-state-note").textContent = data.agent?.loaded ? "LaunchAgent 已加载" : "需安装后生效";
-  }
-
-  function renderAgent(agent) {
-    const installed = Boolean(agent.installed);
-    const loaded = Boolean(agent.loaded);
-    $("#agent-detail-state").textContent = installed
-      ? (loaded ? "已安装并加载" : "已安装，未加载")
-      : "未安装";
-    el.agentDot.className = `status-dot ${loaded ? "online" : installed ? "warn" : ""}`;
-    el.installAgent.textContent = installed ? "重新安装 / 更新守护" : "安装 / 更新守护";
-    el.uninstallAgent.disabled = !installed;
-    $("#agent-foot").textContent = installed
-      ? "守护已就绪：关闭页面后，扫描和清理仍会按计划进行。"
-      : "安装后关闭页面，自动扫描仍会按计划进行。";
-  }
-
-  function syncScheduleUI() {
-    const weekly = el.scanFrequency.value === "weekly";
-    el.weekdayField.classList.toggle("disabled", !weekly);
-    $("#auto-clean-note").textContent = el.autoCleanEnabled.checked
-      ? "自动清理已开启：只在可用空间低于阈值时执行，且只删除 AUTO 标记的缓存。永久删除，不进废纸篓。"
-      : "开启后只在可用空间低于阈值时执行，并且只删除 AUTO 标记的缓存。永久删除，不进废纸篓。";
-  }
-
-  function markSettingsDirty() {
-    state.settingsDirty = true;
-    el.settingsState.textContent = "未保存";
-    el.settingsState.style.color = "var(--peach)";
-    el.formHint.textContent = "有尚未保存的修改。";
-    el.formHint.classList.remove("saved");
-    syncScheduleUI();
-  }
-
-  async function saveSettings(event) {
-    event.preventDefault();
-    const days = $$("button[data-day].active", el.weekdayPicker).map((button) => Number(button.dataset.day));
-    const wasEnabled = Boolean(state.settings?.auto_clean?.enabled);
-    const willEnable = el.autoCleanEnabled.checked;
-    if (!wasEnabled && willEnable) {
-      const okay = window.confirm(
-        "开启自动清理后，程序会在可用空间低于阈值时永久删除 AUTO 缓存（不进废纸篓）。\n\n" +
-        "范围仅限包管理器、更新包和诊断日志；不会删除聊天记录、Docker.raw 或 VM swap。继续吗？"
-      );
-      if (!okay) {
-        el.autoCleanEnabled.checked = false;
-        syncScheduleUI();
-        return;
-      }
-    }
-    const payload = {
-      scan: {
-        enabled: el.scanEnabled.checked,
-        frequency: el.scanFrequency.value,
-        time: el.scanTime.value || "03:00",
-        weekdays: days.length ? days : [1, 2, 3, 4, 5, 6, 7],
-      },
-      auto_clean: {
-        enabled: willEnable,
-        only_below_free_gb: Number(el.autoThreshold.value) || 0,
-        max_total_gb: Number(el.autoMax.value) || 20,
-        min_interval_hours: Number(el.autoInterval.value) || 24,
-      },
-      history_retention_days: Number(el.historyDays.value) || 180,
-    };
-    const button = $("#save-settings");
-    button.disabled = true;
-    button.textContent = "保存中…";
-    try {
-      const data = await api("/api/settings", { method: "POST", body: payload });
-      applyAutomation(data, false);
-      el.formHint.textContent = "已保存并生效。";
-      el.formHint.classList.add("saved");
-      toast("设置已保存", willEnable ? "自动清理已开启，只处理 AUTO 缓存。" : "自动扫描与清理计划已更新。");
-    } catch (err) {
-      toast("保存失败", err.message || String(err), "error");
-    } finally {
-      button.disabled = false;
-      button.textContent = "保存设置";
-    }
-  }
-
-  async function installAgent() {
-    const button = $("#install-agent");
-    button.disabled = true;
-    button.textContent = "安装中…";
-    try {
-      const result = await api("/api/agent/install", { method: "POST", body: {} });
-      if (!result.ok) throw new Error(result.error || "安装失败");
-      state.agent = result.status || {};
-      renderAgent(state.agent);
-      $("#agent-state").textContent = "已安装";
-      $("#agent-state").className = "on";
-      $("#agent-state-note").textContent = state.agent.loaded ? "LaunchAgent 已加载" : "需重新加载";
-      toast("常驻守护已安装", "登录时自动启动，并在服务退出后 5 分钟内恢复。");
-    } catch (err) {
-      toast("守护安装失败", err.message || String(err), "error");
-    } finally {
-      button.disabled = false;
-      button.textContent = state.agent?.installed ? "重新安装 / 更新守护" : "安装 / 更新守护";
-      renderAgent(state.agent || {});
-    }
-  }
-
-  async function uninstallAgent() {
-    if (!window.confirm("移除常驻守护？自动扫描将只在你打开 App 或手动启动服务时运行。")) return;
-    const button = $("#uninstall-agent");
-    button.disabled = true;
-    try {
-      const result = await api("/api/agent/uninstall", { method: "POST", body: {} });
-      if (!result.ok) throw new Error(result.error || "移除失败");
-      if (state.agent) state.agent = result.status;
-      renderAgent(result.status || {});
-      toast("常驻守护已移除", "本地服务保持运行，但不再开机自启。");
-      loadAutomation();
-    } catch (err) {
-      toast("移除失败", err.message || String(err), "error");
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  async function backgroundRefresh() {
-    if (document.hidden || state.scanning || state.cleaning) return;
-    try {
-      const data = await api("/api/automation");
-      applyAutomation(data, state.settingsDirty);
-      if (!state.settingsDirty) {
-        const latest = await api("/api/latest");
-        if (latest.scan && state.scan && latest.scan.id !== state.scan.id) {
-          applyScan(latest.scan);
-          toast("后台扫描完成", "定时扫描已更新报告。");
-        }
-      }
-      loadHistory();
-    } catch (_) { /* keep the current view; transient background errors are fine */ }
   }
 
   // ---------------------------------------------------------------- history --
@@ -811,6 +571,7 @@
     }
     el.historyList.innerHTML = events.slice(0, 20).map((event) => {
       const isClean = event.type === "cleanup";
+      const isLaunch = event.trigger === "launch";
       const isAuto = event.trigger === "auto";
       const date = formatDate(event.created_at);
       if (isClean) {
@@ -820,8 +581,8 @@
           <div class="history-row">
             <div class="history-icon clean">${iconFor("clean")}</div>
             <div class="history-main">
-              <div class="history-title">${isAuto ? "自动清理" : "清理"}了 ${count} 项缓存${errCount ? ` · ${errCount} 项失败` : ""}${isAuto ? '<span class="history-tag auto">AUTO</span>' : ""}</div>
-              <div class="history-sub">${date} · ${event.scan_id ? "关联扫描 " + esc(String(event.scan_id).slice(-12)) : (isAuto ? "定时任务" : "手动清理")}</div>
+              <div class="history-title">清理了 ${count} 项缓存${errCount ? ` · ${errCount} 项失败` : ""}</div>
+              <div class="history-sub">${date} · ${event.scan_id ? "关联扫描 " + esc(String(event.scan_id).slice(-12)) : "手动清理"}</div>
             </div>
             <div class="history-value clean"><strong>+${fmt(event.freed_bytes)}</strong><span>已释放</span></div>
           </div>
@@ -832,7 +593,7 @@
         <div class="history-row">
           <div class="history-icon">${iconFor("scan")}</div>
           <div class="history-main">
-            <div class="history-title">${isAuto ? "定时扫描" : "只读扫描"} · 隐藏数据 ${fmt(event.system_data_bytes)}${isAuto ? '<span class="history-tag auto">AUTO</span>' : ""}</div>
+            <div class="history-title">${isAuto ? "自动扫描" : (isLaunch ? "启动扫描" : "手动扫描")} · 隐藏数据 ${fmt(event.system_data_bytes)}${isLaunch ? '<span class="history-tag launch">启动</span>' : ""}</div>
             <div class="history-sub">${date} · ${esc(event.macos || "macOS")} · ${disk}</div>
           </div>
           <div class="history-value"><strong>${fmt(event.cleanable_bytes)}</strong><span>可清理</span></div>

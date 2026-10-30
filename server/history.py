@@ -6,12 +6,10 @@ once PostgreSQL is available, new scans and cleanups are recorded there.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import threading
 import time
 from contextlib import closing
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from .config import (
@@ -20,11 +18,9 @@ from .config import (
     DB_PASSWORD,
     DB_PORT,
     DB_USER,
-    LATEST_SCAN,
     LOCAL_HISTORY,
-    SCANS_DIR,
 )
-from .util import append_jsonl, atomic_write_json, now_iso, read_json, read_jsonl
+from .util import append_jsonl, read_jsonl
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS scans (
@@ -225,72 +221,6 @@ class HistoryStore:
                 self._schema_ready = True
             except Exception as exc:
                 self._last_error = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
-
-    def prune(self, days: int) -> dict:
-        """Delete old scan/cleanup history while keeping the local fallback."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max(7, int(days)))
-        local_removed = 0
-        rows = read_jsonl(LOCAL_HISTORY)
-        kept = []
-        for row in rows:
-            try:
-                when = datetime.fromisoformat(str(row.get("created_at", "")))
-                if when.tzinfo is None:
-                    when = when.replace(tzinfo=timezone.utc)
-            except (ValueError, TypeError):
-                when = datetime.now(timezone.utc)
-            if when < cutoff:
-                local_removed += 1
-            else:
-                kept.append(row)
-        if local_removed:
-            LOCAL_HISTORY.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(prefix=".history-", dir=str(LOCAL_HISTORY.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    for row in kept:
-                        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-                os.replace(tmp, LOCAL_HISTORY)
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-
-        reports_deleted = 0
-        latest_id = str((read_json(LATEST_SCAN, {}) or {}).get("id", ""))
-        for report in SCANS_DIR.glob("scan-*.json") if SCANS_DIR.exists() else []:
-            if latest_id and report.stem == latest_id:
-                continue
-            try:
-                payload = json.loads(report.read_text(encoding="utf-8"))
-                when = datetime.fromisoformat(str(payload.get("created_at", "")))
-                if when.tzinfo is None:
-                    when = when.replace(tzinfo=timezone.utc)
-                if when < cutoff:
-                    report.unlink()
-                    reports_deleted += 1
-            except (OSError, ValueError, TypeError):
-                continue
-
-        scans_deleted = 0
-        cleanups_deleted = 0
-        try:
-            with closing(self._connect()) as conn, conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM scans WHERE created_at < %s", (cutoff,))
-                    scans_deleted = max(0, cur.rowcount)
-                    cur.execute("DELETE FROM cleanup_runs WHERE created_at < %s", (cutoff,))
-                    cleanups_deleted = max(0, cur.rowcount)
-                conn.commit()
-            self._schema_ready = True
-        except Exception as exc:
-            self._last_error = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
-        return {
-            "scans": scans_deleted,
-            "cleanups": cleanups_deleted,
-            "local_events": local_removed,
-            "reports": reports_deleted,
-            "cutoff": cutoff.isoformat(timespec="seconds"),
-        }
 
     # ------------------------------------------------------------------- reads
     def _db_events(self, limit: int) -> List[dict]:

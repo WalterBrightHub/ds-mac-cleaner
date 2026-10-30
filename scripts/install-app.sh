@@ -26,14 +26,6 @@ fi
 echo "√ installed: $DEST"
 echo "  已加入启动台（Launchpad）。首次打开请允许本地网络/文件访问。"
 
-if [ "${DSMC_SKIP_AGENT:-0}" != "1" ]; then
-  echo "→ installing always-on LaunchAgent"
-  if "$ROOT/scripts/install-agent.sh" >/dev/null 2>&1; then
-    echo "  常驻守护已安装：登录自启，意外退出后 5 分钟内恢复。"
-  else
-    echo "  ! 常驻守护安装失败，可稍后在 Web 的「常驻」页重试。"
-  fi
-fi
 if [ "${1:-}" != "--no-open" ]; then
   open "$DEST"
 fi

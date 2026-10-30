@@ -67,29 +67,6 @@ SAFE_CACHE_RE = re.compile(
     r"(cache|updater)$"
 )
 
-# A narrower set used only by unattended cleanup. Browser caches, downloaded
-# browser binaries and compiler data stay manual even though they are safe.
-AUTO_CLEAN_CACHE_EXACT = {
-    "Yarn",
-    "pnpm",
-    "npm",
-    "pip",
-    "Homebrew",
-    "node-gyp",
-    "typescript",
-    "go-build",
-    "CocoaPods",
-    "Sentry",
-    "Codex",
-    "TRAE SOLO CN",
-    "Trae CN",
-    "com.tencent.workbuddy.mac.BundleMigration",
-    "@guanjia-openclawelectron-updater",
-    "@deepseek-aidsh-desktop-updater",
-    "xterminal-updater",
-}
-AUTO_CLEAN_CACHE_RE = re.compile(r"(?i)(updater|update-cache|bundlemigration)$")
-
 CACHE_NOTES = {
     "Yarn": "Yarn 全局包缓存。删除后下次安装依赖会重新下载，不影响项目源码。",
     "pnpm": "pnpm 的包缓存。删除后下次安装会重新下载；当前项目里的 node_modules 不受影响。",
@@ -130,7 +107,6 @@ FIXED_PATHS = [
         "kind": "logs",
         "risk": "safe",
         "cleanable": True,
-        "auto_clean": True,
         "description": "应用崩溃日志，删除后系统会按需重新生成。",
         "hint": "可安全清理。",
     },
@@ -164,7 +140,6 @@ FIXED_PATHS = [
         "kind": "cache",
         "risk": "safe",
         "cleanable": True,
-        "auto_clean": True,
         "description": "npm 的内容寻址缓存，可安全重建。",
         "hint": "可安全清理。",
     },
@@ -199,7 +174,7 @@ FIXED_PATHS = [
         "risk": "review",
         "cleanable": False,
         "description": "应用日志目录。诊断报告可单独安全清理，其他日志请按应用判断。",
-        "hint": "只自动清理其中的 DiagnosticReports。",
+        "hint": "只允许清理其中的 DiagnosticReports。",
     },
     {
         "key": "mail",
@@ -353,8 +328,7 @@ def _friendly_app_support(name: str) -> str:
 
 
 def _base_item(path: Path, category: str, kind: str, risk: str, cleanable: bool,
-               label: str, description: str, hint: str, size: int,
-               auto_clean: bool = False) -> dict:
+               label: str, description: str, hint: str, size: int) -> dict:
     snap = stat_snapshot(path)
     return {
         "id": item_id(path, kind),
@@ -368,7 +342,6 @@ def _base_item(path: Path, category: str, kind: str, risk: str, cleanable: bool,
         "size_label": human_bytes(size),
         "risk": risk,
         "cleanable": bool(cleanable and risk == "safe"),
-        "auto_clean": bool(auto_clean and cleanable and risk == "safe"),
         "selected_default": bool(cleanable and risk == "safe"),
         "description": description,
         "hint": hint,
@@ -443,12 +416,9 @@ def build_items(measurements: dict) -> List[dict]:
         else:
             desc = "未列入安全白名单的缓存目录。它可能包含应用状态，因此不会自动删除。"
             hint = "报告只读；确认无影响后可在 Finder 中手动处理。"
-        is_auto = risk == "safe" and (
-            name in AUTO_CLEAN_CACHE_EXACT or bool(AUTO_CLEAN_CACHE_RE.search(name))
-        )
         items.append(_base_item(
             p, "caches", "cache", risk, risk == "safe",
-            f"{name} 缓存", desc, hint, child["size"], auto_clean=is_auto,
+            f"{name} 缓存", desc, hint, child["size"],
         ))
 
     # Fixed catalog entries.
@@ -464,7 +434,6 @@ def build_items(measurements: dict) -> List[dict]:
         item = _base_item(
             p, spec["category"], spec["kind"], spec["risk"], spec["cleanable"],
             spec["label"], spec["description"], spec["hint"], size,
-            auto_clean=bool(spec.get("auto_clean", False)),
         )
         item["key"] = key
         if key == "mobile-backup":

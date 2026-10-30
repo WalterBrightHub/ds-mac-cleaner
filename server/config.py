@@ -78,10 +78,3 @@ APP_SUPPORT_NAMES = {
     "MobileSync": "iPhone / iPad 备份",
     "Adobe": "Adobe",
 }
-
-# LaunchAgent that keeps the local server available across logins.
-AGENT_LABEL = "com.deepseek.dsmaccleaner.agent"
-AGENT_DIR = HOME / "Library" / "LaunchAgents"
-AGENT_PLIST = AGENT_DIR / f"{AGENT_LABEL}.plist"
-AGENT_RUNNER = ROOT / "scripts" / "agent-runner.sh"
-AGENT_LOG = RUNTIME_DIR / "agent.log"

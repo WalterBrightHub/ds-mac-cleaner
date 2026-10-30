@@ -34,7 +34,6 @@
       <a href="#overview">概览</a>
       <a href="#why">成因</a>
       <a href="#clean">清理</a>
-      <a href="#automation">常驻</a>
       <a href="#history">历史</a>
       <a href="#method">安全边界</a>
     </nav>
@@ -146,7 +145,7 @@
       <div class="section-head">
         <div>
           <div class="eyebrow"><span></span> THE CATCH-ALL</div>
-          <h2>为什么它能吃掉 200GB？</h2>
+          <h2>为什么它能吃掉上百 GB？</h2>
         </div>
         <p>
           「系统数据」是 Finder 算不出来的部分：它包含用户 Library 里的应用容器、缓存与支持文件，
@@ -157,7 +156,7 @@
         <article class="insight placeholder">
           <span class="insight-index">01</span>
           <h3>先扫描，才有答案</h3>
-          <p>不同 Mac 的「系统数据」来源完全不同，本机结果会把每一块占用标出来。</p>
+          <p>不同 Mac 的「系统数据」来源完全不同，每次扫描都会把每一块占用标出来。</p>
         </article>
       </div>
     </section>
@@ -258,162 +257,6 @@
       </div>
     </section>
 
-
-    <section class="section automation-section" id="automation">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span></span> ALWAYS-ON CARE</div>
-          <h2>让清理成为习惯</h2>
-        </div>
-        <p>
-          开启后，守护进程会按计划做只读扫描；自动清理只处理包管理器、更新包和诊断日志，
-          永远不会碰聊天记录、Docker.raw 或虚拟内存。
-        </p>
-      </div>
-
-      <div class="automation-strip card">
-        <div class="automation-stat">
-          <span>下一次扫描</span>
-          <strong id="next-scan">—</strong>
-          <small id="next-scan-note">等待设置同步</small>
-        </div>
-        <div class="automation-stat">
-          <span>自动清理</span>
-          <strong id="auto-state">—</strong>
-          <small id="auto-state-note">默认关闭</small>
-        </div>
-        <div class="automation-stat">
-          <span>最近自动动作</span>
-          <strong id="last-auto">—</strong>
-          <small id="last-auto-note">还没有记录</small>
-        </div>
-        <div class="automation-stat">
-          <span>常驻守护</span>
-          <strong id="agent-state">—</strong>
-          <small id="agent-state-note">每 5 分钟检查一次</small>
-        </div>
-      </div>
-
-      <div class="automation-grid">
-        <form class="card automation-form" id="automation-form">
-          <div class="card-head">
-            <div>
-              <div class="eyebrow"><span></span> SCHEDULE</div>
-              <h2>自动扫描与安全清理</h2>
-            </div>
-            <span class="source-chip" id="settings-state">未修改</span>
-          </div>
-
-          <div class="setting-block">
-            <div class="setting-head">
-              <div>
-                <h3>定时只读扫描</h3>
-                <p>扫描不会删除任何文件。它会刷新报告、磁盘估算和自动清理依据。</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="scan-enabled">
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="field-grid schedule-fields">
-              <label class="field">
-                <span>频率</span>
-                <select id="scan-frequency">
-                  <option value="daily">每天</option>
-                  <option value="weekly">每周</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>时间</span>
-                <input type="time" id="scan-time" step="60">
-              </label>
-              <div class="field weekday-field" id="weekday-field">
-                <span>星期</span>
-                <div class="day-picker" id="weekday-picker" role="group" aria-label="每周扫描日">
-                  <button type="button" data-day="1">一</button>
-                  <button type="button" data-day="2">二</button>
-                  <button type="button" data-day="3">三</button>
-                  <button type="button" data-day="4">四</button>
-                  <button type="button" data-day="5">五</button>
-                  <button type="button" data-day="6">六</button>
-                  <button type="button" data-day="7">日</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="setting-block">
-            <div class="setting-head">
-              <div>
-                <h3>自动清理可重建缓存</h3>
-                <p id="auto-clean-note">开启后只在可用空间低于阈值时执行，并且只删除 AUTO 标记的缓存。永久删除，不进废纸篓。</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="auto-clean-enabled">
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="field-grid three">
-              <label class="field">
-                <span>可用空间低于（GB）</span>
-                <input type="number" id="auto-threshold" min="0" max="2000" step="1">
-              </label>
-              <label class="field">
-                <span>单次最多（GB）</span>
-                <input type="number" id="auto-max" min="1" max="500" step="1">
-              </label>
-              <label class="field">
-                <span>最小间隔（小时）</span>
-                <input type="number" id="auto-interval" min="1" max="720" step="1">
-              </label>
-            </div>
-            <p class="auto-scope">AUTO 范围：Yarn / pnpm / npm / pip / Homebrew / node-gyp / 更新包 / 诊断日志。浏览器缓存、Playwright 二进制、聊天文件不在此列。</p>
-          </div>
-
-          <div class="setting-block compact">
-            <div class="setting-head">
-              <div>
-                <h3>历史保留</h3>
-                <p>超过天数的扫描和清理记录会从 PostgreSQL 与本机 JSONL 中删除。</p>
-              </div>
-              <label class="field inline-field">
-                <input type="number" id="history-days" min="7" max="3650" step="1">
-                <span>天</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="form-footer">
-            <span class="form-hint" id="form-hint">设置只保存在本机。</span>
-            <button class="btn btn-primary" type="submit" id="save-settings">保存设置</button>
-          </div>
-        </form>
-
-        <aside class="card agent-card">
-          <div class="card-head">
-            <div>
-              <div class="eyebrow"><span></span> WATCHDOG</div>
-              <h2>常驻守护</h2>
-            </div>
-            <span class="status-dot" id="agent-dot"></span>
-          </div>
-          <p class="agent-copy">
-            安装一个用户级 LaunchAgent：登录时自动启动本地服务，并在服务意外退出后 5 分钟内恢复。
-            它不会以 root 运行，也不会修改系统目录。
-          </p>
-          <div class="agent-detail">
-            <div><span>状态</span><strong id="agent-detail-state">未检测</strong></div>
-            <div><span>检查间隔</span><strong>300 秒</strong></div>
-            <div><span>运行身份</span><strong>当前用户</strong></div>
-          </div>
-          <div class="agent-actions">
-            <button class="btn btn-primary btn-small" type="button" id="install-agent">安装 / 更新守护</button>
-            <button class="btn btn-ghost btn-small" type="button" id="uninstall-agent">移除</button>
-          </div>
-          <p class="agent-foot" id="agent-foot">安装后关闭页面，自动扫描仍会按计划进行。</p>
-        </aside>
-      </div>
-    </section>
 
     <section class="section history-section" id="history">
       <div class="section-head">
@@ -527,6 +370,14 @@
       </div>
     </form>
   </dialog>
+
+  <div class="refresh-toast" id="refresh-toast" hidden>
+    <span class="refresh-spinner"></span>
+    <div>
+      <strong>正在刷新报告</strong>
+      <span id="refresh-text">读取上次结果后自动扫描…</span>
+    </div>
+  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite">
     <span class="toast-mark"></span>

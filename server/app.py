@@ -28,18 +28,12 @@ if __package__ in (None, ""):
     from server.cleanup import CleanupError, run_cleanup  # type: ignore
     from server.history import HistoryStore  # type: ignore
     from server.scanner import run_scan  # type: ignore
-    from server.settings import AutomationState, SettingsStore  # type: ignore
-    from server.automation import Automation  # type: ignore
-    from server.agent import AgentManager  # type: ignore
     from server.util import atomic_write_json, read_json, run  # type: ignore
 else:
     from . import config
     from .cleanup import CleanupError, run_cleanup
     from .history import HistoryStore
     from .scanner import run_scan
-    from .settings import AutomationState, SettingsStore
-    from .automation import Automation
-    from .agent import AgentManager
     from .util import atomic_write_json, read_json, run
 
 TOKEN = secrets.token_urlsafe(28)
@@ -188,15 +182,8 @@ class App:
         config.SCANS_DIR.mkdir(parents=True, exist_ok=True)
         self.history = HistoryStore()
         self.tasks = TaskManager(self.history)
-        self.settings = SettingsStore()
-        self.automation_state = AutomationState()
-        self.agent = AgentManager()
-        self.automation = Automation(
-            self.settings, self.automation_state, self.tasks, self.history, self.latest,
-        )
         self.started = time.time()
         self._db_start_lock = threading.Lock()
-        self.automation.start()
 
     def latest(self) -> Optional[dict]:
         report = read_json(config.LATEST_SCAN)
@@ -330,10 +317,6 @@ class Handler(BaseHTTPRequestHandler):
                 "arch": platform.machine(),
                 "translated": bool(os.environ.get("DSMC_TRANSLATED") == "1"),
                 "port": config.PORT,
-                "automation": {
-                    "scan_enabled": APP.settings.get()["scan"]["enabled"],
-                    "auto_clean_enabled": APP.settings.get()["auto_clean"]["enabled"],
-                },
             })
             return
         if path == "/api/latest":
@@ -352,17 +335,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/db/status":
             self._json({"ok": True, "db": APP.history.status()})
-            return
-        if path in ("/api/automation", "/api/settings"):
-            self._json({
-                "ok": True,
-                "settings": APP.settings.get(),
-                "automation": APP.automation.status(),
-                "agent": APP.agent.status(),
-            })
-            return
-        if path == "/api/agent/status":
-            self._json({"ok": True, "agent": APP.agent.status()})
             return
         if path.startswith("/api/tasks/"):
             task_id = path.rsplit("/", 1)[-1]
@@ -438,7 +410,11 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         try:
             if path == "/api/scans":
-                task = APP.tasks.start_scan()
+                data = self._read_json()
+                trigger = data.get("trigger", "manual")
+                if trigger not in ("manual", "launch"):
+                    trigger = "manual"
+                task = APP.tasks.start_scan(trigger=trigger)
                 self._json({"ok": True, "task": task}, 202)
                 return
             if path == "/api/cleanups":
@@ -457,24 +433,6 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 task = APP.tasks.start_cleanup(report, item_ids, dry_run=bool(data.get("dry_run", False)))
                 self._json({"ok": True, "task": task}, 202)
-                return
-            if path == "/api/settings":
-                data = self._read_json()
-                settings = APP.settings.update(data)
-                self._json({
-                    "ok": True,
-                    "settings": settings,
-                    "automation": APP.automation.status(),
-                    "agent": APP.agent.status(),
-                })
-                return
-            if path == "/api/agent/install":
-                result = APP.agent.install()
-                self._json(result, 200 if result.get("ok") else 500)
-                return
-            if path == "/api/agent/uninstall":
-                result = APP.agent.uninstall()
-                self._json(result, 200 if result.get("ok") else 500)
                 return
             if path == "/api/db/start":
                 result = APP.start_db()

@@ -1,4 +1,4 @@
-.PHONY: setup serve test app agent agent-remove db-up db-down db-logs adminer
+.PHONY: setup serve test app db-up db-down db-logs adminer
 
 setup:
 	./scripts/setup.sh
@@ -11,12 +11,6 @@ test:
 
 app:
 	./scripts/install-app.sh --no-open
-
-agent:
-	./scripts/install-agent.sh
-
-agent-remove:
-	./scripts/uninstall-agent.sh
 
 db-up:
 	docker compose up -d db

@@ -82,7 +82,7 @@ def run_cleanup(report: dict, item_ids: List[str], dry_run: bool = False) -> dic
         if item is None:
             raise CleanupError(f"项目不在当前扫描报告中：{iid}")
         if not item.get("cleanable") or item.get("risk") != "safe":
-            raise CleanupError(f"项目不允许自动清理：{item.get('label', iid)}")
+            raise CleanupError(f"项目不允许清理：{item.get('label', iid)}")
         selected.append(item)
     if not selected:
         raise CleanupError("没有可清理的项目")
