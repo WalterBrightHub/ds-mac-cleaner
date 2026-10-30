@@ -35,6 +35,12 @@ COMPOSE_FILE = ROOT / "docker-compose.yml"
 # catalog entries that also carry risk == "safe".
 SAFE_DELETE_ROOTS = [
     LIBRARY / "Caches",
+]
+
+# These roots are themselves catalog items, so exact equality is allowed.
+# The broad ~/Library/Caches root is intentionally not exact: a tampered report
+# must never authorize deleting the whole cache directory.
+SAFE_EXACT_DELETE_ROOTS = [
     LIBRARY / "Logs" / "DiagnosticReports",
     LIBRARY / "Developer" / "Xcode" / "DerivedData",
     LIBRARY / "Developer" / "CoreSimulator" / "Caches",

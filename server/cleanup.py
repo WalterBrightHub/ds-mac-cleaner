@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import List, Tuple
 
-from .config import SAFE_DELETE_ROOTS
+from .config import SAFE_DELETE_ROOTS, SAFE_EXACT_DELETE_ROOTS
 from .util import is_within, now_iso
 
 _CLEAN_LOCK = threading.Lock()
@@ -37,10 +37,70 @@ def _safe_target(raw_path: str) -> Tuple[Path, Path]:
     if os.path.ismount(str(path)):
         raise CleanupError(f"拒绝删除挂载点：{path}")
     real = Path(os.path.realpath(str(path)))
+    for root in SAFE_EXACT_DELETE_ROOTS:
+        if real == Path(os.path.realpath(str(root))):
+            return path, root
     for root in SAFE_DELETE_ROOTS:
         if is_within(real, root):
             return path, root
     raise CleanupError(f"路径不在允许清理的缓存根目录内：{path}")
+
+
+def permission_probe() -> list:
+    """Check whether this process can actually create/delete files in safe roots."""
+    checks = []
+    roots = list(SAFE_DELETE_ROOTS) + list(SAFE_EXACT_DELETE_ROOTS)
+    for root in roots:
+        if not root.exists():
+            continue
+        probe = root / f".dsmac-permission-probe-{os.getpid()}"
+        try:
+            fd = os.open(str(probe), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                os.write(fd, b"ok")
+            finally:
+                os.close(fd)
+            probe.unlink()
+            checks.append({"root": str(root), "writable": True, "error": None})
+        except OSError as exc:
+            checks.append({"root": str(root), "writable": False, "error": str(exc)})
+        finally:
+            try:
+                if probe.exists():
+                    probe.unlink()
+            except OSError:
+                pass
+    return checks
+
+
+def _check_parent_writable(selected):
+    parents = []
+    seen = set()
+    for item in selected:
+        parent = Path(item["path"]).parent
+        if str(parent) in seen:
+            continue
+        seen.add(str(parent))
+        parents.append(parent)
+    for parent in parents:
+        probe = parent / f".dsmac-permission-probe-{os.getpid()}"
+        try:
+            fd = os.open(str(probe), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                os.write(fd, b"ok")
+            finally:
+                os.close(fd)
+            probe.unlink()
+        except OSError as exc:
+            try:
+                if probe.exists():
+                    probe.unlink()
+            except OSError:
+                pass
+            raise CleanupError(
+                f"当前服务没有删除权限（{parent}）：{exc}。"
+                "请从启动台重新打开 DS 麦清理，而不是从受限终端或沙盒进程启动服务。"
+            )
 
 
 def _remove_tree(path: Path) -> None:
@@ -91,6 +151,8 @@ def run_cleanup(report: dict, item_ids: List[str], dry_run: bool = False) -> dic
         raise CleanupError("已有一个清理任务正在运行，请稍后")
     started = time.time()
     try:
+        if not dry_run:
+            _check_parent_writable(selected)
         results = []
         errors = []
         freed = 0

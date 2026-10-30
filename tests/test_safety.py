@@ -32,10 +32,13 @@ class CleanupSafetyTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.old_roots = cleanup.SAFE_DELETE_ROOTS
+        self.old_exact = cleanup.SAFE_EXACT_DELETE_ROOTS
         cleanup.SAFE_DELETE_ROOTS = [self.root]
+        cleanup.SAFE_EXACT_DELETE_ROOTS = []
 
     def tearDown(self):
         cleanup.SAFE_DELETE_ROOTS = self.old_roots
+        cleanup.SAFE_EXACT_DELETE_ROOTS = self.old_exact
         self.tmp.cleanup()
 
     def test_deletes_directory_inside_allowlist(self):
@@ -82,9 +85,27 @@ class CleanupSafetyTests(unittest.TestCase):
         self.assertTrue(target.exists())
         self.assertEqual(result["items"][0]["status"], "would_delete")
 
-    def test_root_itself_is_rejected(self):
+    def test_root_itself_is_rejected_for_broad_root(self):
         result = cleanup.run_cleanup(fake_report([item(self.root)]), ["abc123"])
         self.assertTrue(result["errors"])
+
+    def test_exact_dedicated_root_is_allowed(self):
+        exact = self.root / "DedicatedCache"
+        exact.mkdir()
+        (exact / "x").write_text("x")
+        cleanup.SAFE_EXACT_DELETE_ROOTS = [exact]
+        result = cleanup.run_cleanup(fake_report([item(exact)]), ["abc123"])
+        self.assertFalse(exact.exists())
+        self.assertFalse(result["errors"])
+
+    def test_permission_probe_prevents_mass_attempt(self):
+        target = self.root / "Yarn"
+        target.mkdir()
+        with mock.patch("server.cleanup.os.open", side_effect=PermissionError(1, "Operation not permitted")):
+            with self.assertRaises(cleanup.CleanupError) as ctx:
+                cleanup.run_cleanup(fake_report([item(target)]), ["abc123"])
+        self.assertIn("没有删除权限", str(ctx.exception))
+        self.assertTrue(target.exists())
 
     def test_unknown_id_is_rejected(self):
         with self.assertRaises(cleanup.CleanupError):

@@ -25,13 +25,13 @@ from typing import Dict, Optional
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from server import config  # type: ignore
-    from server.cleanup import CleanupError, run_cleanup  # type: ignore
+    from server.cleanup import CleanupError, permission_probe, run_cleanup  # type: ignore
     from server.history import HistoryStore  # type: ignore
     from server.scanner import run_scan  # type: ignore
     from server.util import atomic_write_json, read_json, run  # type: ignore
 else:
     from . import config
-    from .cleanup import CleanupError, run_cleanup
+    from .cleanup import CleanupError, permission_probe, run_cleanup
     from .history import HistoryStore
     from .scanner import run_scan
     from .util import atomic_write_json, read_json, run
@@ -335,6 +335,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/db/status":
             self._json({"ok": True, "db": APP.history.status()})
+            return
+        if path == "/api/permissions":
+            checks = permission_probe()
+            self._json({
+                "ok": True,
+                "writable": all(item["writable"] for item in checks),
+                "checks": checks,
+            })
             return
         if path.startswith("/api/tasks/"):
             task_id = path.rsplit("/", 1)[-1]

@@ -178,6 +178,7 @@ open http://127.0.0.1:8088
 | GET | `/api/tasks/{id}` | 轮询任务进度/结果 |
 | POST | `/api/cleanups` | 清理指定 `item_ids`，需 `confirm: "DELETE"` |
 | GET | `/api/history?limit=30` | PostgreSQL / 本地历史 |
+| GET | `/api/permissions` | 写入探针检查各缓存根目录的真实删除权限 |
 | POST | `/api/db/start` | 启动 Compose 历史库 |
 | POST | `/api/reveal` | 在 Finder 中显示报告中的路径 |
 | GET | `/api/scans/{id}/export` | 下载 JSON 报告 |
@@ -223,6 +224,17 @@ make test
 
 **为什么 Docker 占了 10GB，但 `ls` 显示 1TB？**  
 `Docker.raw` 是稀疏文件，逻辑上限 1TB，实际占用由 `du` 统计。不要直接删。
+
+**清理结果释放 0 字节 / 报 `Operation not permitted`？**  
+说明服务进程没有真实文件写权限。常见原因是服务由受限沙盒、某些自动化终端或 IDE 任务启动，
+而不是由 `/Applications/DS Mac Cleaner.app` 启动。先检查：
+
+```bash
+curl -s http://127.0.0.1:8787/api/permissions | jq .
+```
+
+`writable` 必须全部为 `true`。若为 `false`，退出当前服务后从启动台重新打开 App。
+从普通终端启动 `./scripts/start-server.sh` 通常也有权限；关键是不要从受限沙盒进程启动。
 
 **历史库一直离线？**  
 先确认 Docker Desktop 已启动，再点 UI 的「启动历史数据库」，或手动：
