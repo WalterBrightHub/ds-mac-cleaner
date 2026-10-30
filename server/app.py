@@ -136,6 +136,7 @@ class TaskManager:
             config.SCANS_DIR.mkdir(parents=True, exist_ok=True)
             atomic_write_json(config.SCANS_DIR / f"{report['id']}.json", report)
             atomic_write_json(config.LATEST_SCAN, report)
+            self._prune_scan_reports(keep=60)
             try:
                 self.history.record_scan(report, trigger=task.get("trigger", "manual"))
             except Exception:
@@ -191,6 +192,22 @@ class App:
             return None
         report["age_seconds"] = max(0, int(time.time() - float(report.get("started_at", time.time()))))
         return report
+
+    def _prune_scan_reports(self, keep: int = 60) -> None:
+        """Keep history summaries in the DB but bound full JSON report files."""
+        try:
+            files = sorted(
+                config.SCANS_DIR.glob("scan-*.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            for old in files[keep:]:
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
     def get_scan(self, scan_id: str) -> Optional[dict]:
         if not SCAN_ID_RE.match(scan_id or ""):
@@ -326,10 +343,15 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/history":
             query = urllib.parse.parse_qs(parsed.query)
             try:
-                limit = max(1, min(100, int(query.get("limit", ["30"])[0])))
+                page = max(1, int(query.get("page", ["1"])[0]))
             except ValueError:
-                limit = 30
-            payload = APP.history.list_events(limit)
+                page = 1
+            try:
+                raw_size = query.get("page_size", query.get("limit", ["10"]))[0]
+                page_size = max(1, min(50, int(raw_size)))
+            except ValueError:
+                page_size = 10
+            payload = APP.history.list_page(page, page_size)
             payload["ok"] = True
             self._json(payload)
             return

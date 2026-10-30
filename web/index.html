@@ -299,6 +299,24 @@
             <p>扫描和清理完成后，会在这里留下时间线。</p>
           </div>
         </div>
+        <div class="history-pager" id="history-pager" hidden>
+          <div class="history-count">
+            共 <strong id="history-total">0</strong> 条记录
+            <span>· 摘要长期保留，最近 60 份完整报告可导出</span>
+          </div>
+          <div class="history-controls">
+            <label class="page-size">每页
+              <select id="history-page-size">
+                <option value="10">10 条</option>
+                <option value="25">25 条</option>
+                <option value="50">50 条</option>
+              </select>
+            </label>
+            <button class="pager-btn" id="history-prev" type="button">上一页</button>
+            <span class="page-indicator" id="history-page-indicator">1 / 1</span>
+            <button class="pager-btn" id="history-next" type="button">下一页</button>
+          </div>
+        </div>
       </div>
     </section>
 

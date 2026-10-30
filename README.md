@@ -34,7 +34,8 @@
 - **只读扫描**：动态测量隐藏目录，生成分类、Top 10、磁盘估算和安全等级。
 - **安全清理**：默认勾选可重建缓存；清理前输入 `DELETE`；服务端二次校验路径白名单、
   符号链接、挂载点、真实路径。
-- **历史记录**：扫描与清理存入 PostgreSQL，包含时间、释放量、项目明细、错误和触发方式。
+- **历史记录**：扫描与清理存入 PostgreSQL，包含时间、释放量、项目明细、错误和触发方式；
+  历史页支持分页，默认每页 10 条，可切换 10 / 25 / 50 条。
 - **本机优先**：不联网、无 CDN、无遥测、无外部字体；所有数据留在本机。
 - **macOS 启动器**：`.app` 安装到 `/Applications`，出现在启动台。
 - **响应式 Web UI**：桌面与手机均可查看。
@@ -136,7 +137,7 @@ ds-mac-cleaner/
 ├── launcher/                        # .app 启动脚本模板
 ├── scripts/                         # setup / start / build / install / icon
 ├── server/                          # Python 后端
-├── tests/test_safety.py             # 删除安全测试
+├── tests/                           # 删除安全与本地分页测试
 ├── web/                             # 单页 Web UI
 ├── dist/DS Mac Cleaner.app          # 构建产物（安装前）
 └── docs/                            # 界面截图
@@ -155,8 +156,15 @@ ds-mac-cleaner/
 
 表：
 
-- `scans`：每次扫描的磁盘、估算、完整 JSON 报告、`trigger`（launch/manual）；
+- `scans`：每次扫描的磁盘、估算、**精简报告**（不含逐项文件清单）、`trigger`（launch/manual）；
 - `cleanup_runs`：清理项、请求字节、实际释放、错误、dry-run 标记。
+
+历史增长策略：
+
+- 页面只取当前页（默认 10 条，最大 50 条），不会一次性加载全部记录；
+- 数据库报告在写入时去掉 `items` 明细，单条约 19KB，而不是完整报告的 100KB+；
+- `.runtime/scans/` 只保留最近 **60 份**完整 JSON 报告用于导出，更早的记录仍有历史摘要；
+- 本地 JSONL 与数据库都可分页读取，Docker 未启动时不会阻塞历史页。
 
 Adminer 可选：
 
@@ -177,7 +185,7 @@ open http://127.0.0.1:8088
 | POST | `/api/scans` | 启动扫描；`trigger` 为 `launch` 或 `manual` |
 | GET | `/api/tasks/{id}` | 轮询任务进度/结果 |
 | POST | `/api/cleanups` | 清理指定 `item_ids`，需 `confirm: "DELETE"` |
-| GET | `/api/history?limit=30` | PostgreSQL / 本地历史 |
+| GET | `/api/history?page=1&page_size=10` | 分页历史；兼容旧 `limit` 参数 |
 | GET | `/api/permissions` | 写入探针检查各缓存根目录的真实删除权限 |
 | POST | `/api/db/start` | 启动 Compose 历史库 |
 | POST | `/api/reveal` | 在 Finder 中显示报告中的路径 |
@@ -235,6 +243,11 @@ curl -s http://127.0.0.1:8787/api/permissions | jq .
 
 `writable` 必须全部为 `true`。若为 `false`，退出当前服务后从启动台重新打开 App。
 从普通终端启动 `./scripts/start-server.sh` 通常也有权限；关键是不要从受限沙盒进程启动。
+
+**历史越来越多怎么办？**  
+历史页已经分页；数据库只保存精简摘要，完整报告文件只保留最近 60 份。
+浏览旧记录不会拖慢页面，也不会一次加载全部数据。如果将来需要跨年份归档，
+可以基于 `/api/history` 的 `page` 参数导出，或直接查询 PostgreSQL 的 `scans` / `cleanup_runs`。
 
 **历史库一直离线？**  
 先确认 Docker Desktop 已启动，再点 UI 的「启动历史数据库」，或手动：

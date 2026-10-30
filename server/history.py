@@ -174,7 +174,10 @@ class HistoryStore:
                                 event.get("system_data_bytes"),
                                 event.get("cleanable_bytes"),
                                 trigger,
-                                json.dumps(report, ensure_ascii=False, default=str),
+                                json.dumps(
+                                    {k: v for k, v in report.items() if k != "items"},
+                                    ensure_ascii=False, default=str,
+                                ),
                             ),
                         )
                     conn.commit()
@@ -223,85 +226,115 @@ class HistoryStore:
                 self._last_error = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
 
     # ------------------------------------------------------------------- reads
-    def _db_events(self, limit: int) -> List[dict]:
-        events: List[dict] = []
+    def _db_page(self, page: int, page_size: int):
         with closing(self._connect()) as conn, conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT (SELECT count(*) FROM scans), (SELECT count(*) FROM cleanup_runs)")
+                counts = cur.fetchone() or (0, 0)
+                total = int(counts[0]) + int(counts[1])
+                pages = max(1, (total + page_size - 1) // page_size)
+                page = max(1, min(page, pages))
+                offset = (page - 1) * page_size
                 cur.execute(
-                    """SELECT id, created_at, hostname, macos, disk_total, disk_used,
-                              disk_free, system_data_bytes, cleanable_bytes,
-                              report->'summary', report->'top_consumers', trigger
-                       FROM scans ORDER BY created_at DESC LIMIT %s""",
-                    (limit,),
+                    """SELECT * FROM (
+                           SELECT 'scan'::text AS type, id, created_at, trigger,
+                                  hostname, macos, disk_total, disk_used, disk_free,
+                                  system_data_bytes, cleanable_bytes,
+                                  report->'summary' AS summary,
+                                  report->'top_consumers' AS top_consumers,
+                                  NULL::text AS scan_id, NULL::bigint AS freed_bytes,
+                                  NULL::bigint AS requested_bytes, NULL::jsonb AS items,
+                                  NULL::jsonb AS errors, NULL::boolean AS dry_run
+                           FROM scans
+                           UNION ALL
+                           SELECT 'cleanup'::text, id, created_at, trigger,
+                                  NULL::text, NULL::text, NULL::bigint, NULL::bigint,
+                                  NULL::bigint, NULL::bigint, NULL::bigint,
+                                  NULL::jsonb, NULL::jsonb,
+                                  scan_id, freed_bytes, requested_bytes, items, errors, dry_run
+                           FROM cleanup_runs
+                       ) events
+                       ORDER BY created_at DESC, id DESC
+                       LIMIT %s OFFSET %s""",
+                    (page_size, offset),
                 )
-                for row in cur.fetchall():
-                    events.append({
-                        "type": "scan",
-                        "id": row[0],
-                        "created_at": _iso(row[1]),
-                        "hostname": row[2],
-                        "macos": row[3],
-                        "disk_total": row[4],
-                        "disk_used": row[5],
-                        "disk_free": row[6],
-                        "system_data_bytes": row[7],
-                        "cleanable_bytes": row[8],
-                        "summary": row[9] or {},
-                        "top_consumers": row[10] or [],
-                        "trigger": row[11] or "manual",
-                    })
-                cur.execute(
-                    """SELECT id, created_at, scan_id, freed_bytes, requested_bytes,
-                              items, errors, dry_run, trigger
-                       FROM cleanup_runs ORDER BY created_at DESC LIMIT %s""",
-                    (limit,),
-                )
-                for row in cur.fetchall():
-                    events.append({
-                        "type": "cleanup",
-                        "id": row[0],
-                        "created_at": _iso(row[1]),
-                        "scan_id": row[2],
-                        "freed_bytes": row[3],
-                        "requested_bytes": row[4],
-                        "items": row[5] or [],
-                        "errors": row[6] or [],
-                        "dry_run": row[7],
-                        "trigger": row[8] or "manual",
-                    })
-        return events
+                rows = cur.fetchall()
+        events = []
+        for row in rows:
+            if row[0] == "scan":
+                events.append({
+                    "type": "scan",
+                    "id": row[1],
+                    "created_at": _iso(row[2]),
+                    "trigger": row[3] or "manual",
+                    "hostname": row[4],
+                    "macos": row[5],
+                    "disk_total": row[6],
+                    "disk_used": row[7],
+                    "disk_free": row[8],
+                    "system_data_bytes": row[9],
+                    "cleanable_bytes": row[10],
+                    "summary": row[11] or {},
+                    "top_consumers": row[12] or [],
+                })
+            else:
+                events.append({
+                    "type": "cleanup",
+                    "id": row[1],
+                    "created_at": _iso(row[2]),
+                    "trigger": row[3] or "manual",
+                    "scan_id": row[13],
+                    "freed_bytes": row[14],
+                    "requested_bytes": row[15],
+                    "items": row[16] or [],
+                    "errors": row[17] or [],
+                    "dry_run": row[18],
+                })
+        return events, total, page, pages
 
-    def list_events(self, limit: int = 30) -> dict:
-        local = read_jsonl(LOCAL_HISTORY, limit=limit)
-        db_events: List[dict] = []
+    def _local_page(self, page: int, page_size: int):
+        rows = read_jsonl(LOCAL_HISTORY)
+        rows.reverse()
+        total = len(rows)
+        pages = max(1, (total + page_size - 1) // page_size)
+        page = max(1, min(page, pages))
+        start = (page - 1) * page_size
+        events = rows[start:start + page_size]
+        for event in events:
+            event.setdefault("trigger", "manual")
+        return events, total, page, pages
+
+    def list_page(self, page: int = 1, page_size: int = 10) -> dict:
+        page = max(1, int(page))
+        page_size = max(1, min(50, int(page_size)))
         connected = False
         error = None
         try:
             if not self._schema_ready:
                 self.ensure_schema()
-            db_events = self._db_events(limit)
+            events, total, page, pages = self._db_page(page, page_size)
             connected = True
+            source = "postgres"
         except Exception as exc:
             error = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
             self._last_error = error
-
-        merged = {}
-        for event in local + db_events:
-            key = (event.get("type"), event.get("id"))
-            if key not in merged:
-                merged[key] = event
-        events = list(merged.values())
-        for event in events:
-            event.setdefault("trigger", "manual")
-        events.sort(key=lambda e: e.get("created_at", ""), reverse=True)
-        events = events[:limit]
+            events, total, page, pages = self._local_page(page, page_size)
+            source = "local"
         return {
             "events": events,
-            "source": "postgres" if connected else "local",
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "pages": pages,
+            "has_prev": page > 1,
+            "has_next": page < pages,
+            "source": source,
             "db_connected": connected,
             "db_error": error,
-            "local_events": len(local),
         }
+
+    def list_events(self, limit: int = 30) -> dict:
+        return self.list_page(1, limit)
 
     def local_only(self, limit: int = 30) -> List[dict]:
         return read_jsonl(LOCAL_HISTORY, limit=limit)

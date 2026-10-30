@@ -29,6 +29,8 @@
     cleaning: false,
     db: null,
     history: null,
+    historyPage: 1,
+    historyPageSize: 10,
   };
 
   const el = {};
@@ -55,7 +57,7 @@
     }
     // This product scans when the user opens the app, not on a background timer.
     startScan(true);
-    loadHistory();
+    loadHistory(1);
     setInterval(refreshRelativeTimes, 30000);
   }
 
@@ -86,6 +88,12 @@
     el.historyList = $("#history-list");
     el.historySource = $("#history-source");
     el.dbCallout = $("#db-callout");
+    el.historyPager = $("#history-pager");
+    el.historyTotal = $("#history-total");
+    el.historyPageIndicator = $("#history-page-indicator");
+    el.historyPrev = $("#history-prev");
+    el.historyNext = $("#history-next");
+    el.historyPageSize = $("#history-page-size");
     el.toast = $("#toast");
     el.refreshToast = $("#refresh-toast");
     el.refreshText = $("#refresh-text");
@@ -109,7 +117,13 @@
     $("#storage-settings").addEventListener("click", openStorageSettings);
     $("#db-pill").addEventListener("click", () => (state.db?.connected ? showDbInfo() : startDb()));
     $("#start-db").addEventListener("click", startDb);
-    $("#refresh-history").addEventListener("click", loadHistory);
+    $("#refresh-history").addEventListener("click", () => loadHistory(state.historyPage));
+    el.historyPrev.addEventListener("click", () => loadHistory(state.historyPage - 1));
+    el.historyNext.addEventListener("click", () => loadHistory(state.historyPage + 1));
+    el.historyPageSize.addEventListener("change", () => {
+      state.historyPageSize = Number(el.historyPageSize.value) || 10;
+      loadHistory(1);
+    });
     $("#select-all").addEventListener("click", selectAllSafe);
     $("#clear-all").addEventListener("click", clearSelection);
     $("#clean-selected").addEventListener("click", openConfirm);
@@ -212,7 +226,7 @@
         if (task.status === "error") throw new Error(task.error || "扫描失败");
         applyScan(task.result);
         toast("扫描完成", `已分析 ${task.result.summary.item_count} 项，只读扫描没有修改任何文件。`);
-        loadHistory();
+        loadHistory(1);
       });
     } catch (err) {
       toast("扫描失败", err.message || String(err), "error");
@@ -565,7 +579,7 @@
       } else {
         toast("没有释放空间", errors[0]?.error || "所选项目未能删除，请检查权限。", "error");
       }
-      loadHistory();
+      loadHistory(1);
       state.selected.clear();
       updateSelection();
       await sleep(900);
@@ -581,16 +595,30 @@
   }
 
   // ---------------------------------------------------------------- history --
-  async function loadHistory() {
+  async function loadHistory(page = state.historyPage) {
     try {
-      const res = await api("/api/history?limit=24");
+      const target = Math.max(1, Number(page) || 1);
+      const res = await api(`/api/history?page=${target}&page_size=${state.historyPageSize}`);
       state.history = res;
+      state.historyPage = res.page || target;
       el.historySource.textContent = res.db_connected ? "POSTGRESQL" : "LOCAL JSONL";
       el.dbCallout.hidden = Boolean(res.db_connected);
       renderHistory(res.events || []);
+      renderHistoryPager(res);
     } catch (err) {
       el.historyList.innerHTML = `<div class="history-empty">历史读取失败：${esc(err.message)}</div>`;
+      el.historyPager.hidden = true;
     }
+  }
+
+  function renderHistoryPager(res) {
+    const total = Number(res.total) || 0;
+    el.historyPager.hidden = total === 0;
+    if (!total) return;
+    el.historyTotal.textContent = String(total);
+    el.historyPageIndicator.textContent = `${res.page || 1} / ${res.pages || 1}`;
+    el.historyPrev.disabled = !res.has_prev;
+    el.historyNext.disabled = !res.has_next;
   }
 
   function renderHistory(events) {
@@ -598,7 +626,7 @@
       el.historyList.innerHTML = `<div class="empty-state card compact"><h3>暂无历史</h3><p>扫描和清理完成后，会在这里留下时间线。</p></div>`;
       return;
     }
-    el.historyList.innerHTML = events.slice(0, 20).map((event) => {
+    el.historyList.innerHTML = events.map((event) => {
       const isClean = event.type === "cleanup";
       const isLaunch = event.trigger === "launch";
       const isAuto = event.trigger === "auto";
