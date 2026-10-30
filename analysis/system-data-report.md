@@ -1,5 +1,7 @@
-# 这台 Mac 的「系统数据」解剖报告
+# 示例：一台 Mac 的「系统数据」解剖报告
 
+> 这不是产品预设数据，而是 DS Mac Cleaner 的一次真实扫描样本。  
+> 每次打开产品都会重新扫描，以当前机器为准。  
 > 采集时间：2026-10-30 09:11（Asia/Shanghai）  
 > 机器：MacBook Pro（Apple Silicon，macOS 15.7.4，启动盘 460 GiB）  
 > 方法：DS Mac Cleaner 只读扫描 + `du -skx` + `df -k` + `tmutil listlocalsnapshots`。数字会随缓存和使用情况变化。
