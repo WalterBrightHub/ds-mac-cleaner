@@ -295,7 +295,9 @@
     $("#stat-hidden-note").textContent = `其中 ~/Library ${fmt(scan.summary.library_bytes)}`;
     $("#stat-cleanable").textContent = fmt(scan.summary.cleanable_bytes);
     const safeCount = scan.items.filter((i) => i.cleanable).length;
-    $("#stat-cleanable-note").textContent = `${safeCount} 个白名单缓存`;
+    $("#stat-cleanable-note").textContent = safeCount
+      ? `${safeCount} 个白名单缓存`
+      : "缓存已经清理干净";
     $("#stat-review").textContent = fmt(scan.summary.review_bytes);
     $("#stat-review-note").textContent = "聊天记录 / 个人文件 / VM";
     $("#map-note").textContent = `共 ${fmt(scan.categories.reduce((sum, c) => sum + c.bytes, 0))}`;
@@ -322,10 +324,32 @@
       const pct = (c.bytes / total) * 100;
       return `<span style="width:${pct.toFixed(3)}%;background:${esc(c.color)}" title="${esc(c.label)} ${fmt(c.bytes)}"></span>`;
     }).join("") || '<div class="stack-empty"></div>';
+
+    let cursor = 0;
+    const segments = cats.map((c) => {
+      const start = cursor;
+      cursor += (c.bytes / total) * 100;
+      return `${esc(c.color)} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+    });
+    const donut = $("#category-donut");
+    donut.style.background = segments.length
+      ? `conic-gradient(from -90deg, ${segments.join(", ")})`
+      : "conic-gradient(from -90deg, #e7ece5 0 100%)";
+    $("#donut-total").textContent = fmt(total);
+
     el.mapLegend.innerHTML = cats.map((c) => `
-      <span class="legend-item"><i class="legend-dot" style="background:${esc(c.color)}"></i>${esc(c.label)} <strong>${fmt(c.bytes)}</strong></span>
+      <span class="legend-item">
+        <i class="legend-dot" style="background:${esc(c.color)}"></i>
+        <span class="legend-label">${esc(c.label)}</span>
+        <strong>${fmt(c.bytes)}</strong>
+        <em>${c.percent ?? ((c.bytes / total) * 100).toFixed(1)}%</em>
+      </span>
     `).join("");
     $("#map-note").textContent = `共 ${fmt(total)} · 不含个人文件`;
+    const largest = cats.slice().sort((a, b) => b.bytes - a.bytes)[0];
+    $("#map-footnote").textContent = largest
+      ? `最大来源：${largest.label} ${fmt(largest.bytes)}，占 ${largest.percent ?? ((largest.bytes / total) * 100).toFixed(1)}%`
+      : "按占用大小排序 · 每次扫描重新计算";
   }
 
   function renderTop(scan) {
@@ -385,7 +409,12 @@
     if (state.filter === "safe") items = all.filter((i) => i.cleanable);
     if (state.filter === "review") items = all.filter((i) => !i.cleanable);
     if (!items.length) {
-      el.cleanGroups.innerHTML = `<div class="empty-state card"><h3>这个筛选下没有项目</h3><p>切换到其他分类看看。</p></div>`;
+      const noSafe = state.filter === "safe" && safeCount === 0;
+      el.cleanGroups.innerHTML = `<div class="empty-state card">
+        <div class="empty-orbit"></div>
+        <h3>${noSafe ? "当前没有可安全清理的缓存" : "这个筛选下没有项目"}</h3>
+        <p>${noSafe ? "可重建缓存已经清空。你仍可以查看「需人工确认」中的大文件，或稍后重新扫描。" : "切换到其他分类看看。"}</p>
+      </div>`;
       return;
     }
 
@@ -577,14 +606,15 @@
       if (isClean) {
         const count = (event.items || []).length;
         const errCount = (event.errors || []).length;
+        const failed = !event.freed_bytes && errCount > 0;
         return `
           <div class="history-row">
-            <div class="history-icon clean">${iconFor("clean")}</div>
+            <div class="history-icon clean ${failed ? "failed" : ""}">${iconFor("clean")}</div>
             <div class="history-main">
               <div class="history-title">清理了 ${count} 项缓存${errCount ? ` · ${errCount} 项失败` : ""}</div>
               <div class="history-sub">${date} · ${event.scan_id ? "关联扫描 " + esc(String(event.scan_id).slice(-12)) : "手动清理"}</div>
             </div>
-            <div class="history-value clean"><strong>+${fmt(event.freed_bytes)}</strong><span>已释放</span></div>
+            <div class="history-value clean ${failed ? "failed" : ""}"><strong>${failed ? "0 B" : "+" + fmt(event.freed_bytes)}</strong><span>${failed ? "未释放" : "已释放"}</span></div>
           </div>
         `;
       }

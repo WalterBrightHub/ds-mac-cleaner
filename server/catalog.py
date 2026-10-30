@@ -19,13 +19,13 @@ from .config import (
 from .util import display_path, human_bytes, item_id, stat_snapshot
 
 CATEGORY_META = {
-    "containers": {"label": "应用容器", "color": "#ff8a5b", "order": 1},
-    "appsupport": {"label": "应用数据", "color": "#f4c95d", "order": 2},
-    "caches": {"label": "缓存", "color": "#6ee7b7", "order": 3},
-    "dev": {"label": "开发工具", "color": "#7dd3fc", "order": 4},
-    "media": {"label": "聊天与媒体", "color": "#c4b5fd", "order": 5},
-    "system": {"label": "系统与虚拟内存", "color": "#94a3b8", "order": 6},
-    "user": {"label": "个人文件", "color": "#f9a8d4", "order": 7},
+    "containers": {"label": "应用容器", "color": "#e97a4d", "order": 1},
+    "appsupport": {"label": "应用数据", "color": "#d7a93e", "order": 2},
+    "caches": {"label": "缓存", "color": "#47b786", "order": 3},
+    "dev": {"label": "开发工具", "color": "#5d91c9", "order": 4},
+    "media": {"label": "聊天与媒体", "color": "#8a75c7", "order": 5},
+    "system": {"label": "系统与虚拟内存", "color": "#7d8d98", "order": 6},
+    "user": {"label": "个人文件", "color": "#c66d95", "order": 7},
 }
 
 # Caches whose contents are unambiguously regenerable. Unknown caches stay
