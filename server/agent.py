@@ -49,6 +49,8 @@ class AgentManager:
                 "ProgramArguments": ["/bin/bash", str(config.AGENT_RUNNER)],
                 "RunAtLoad": True,
                 "StartInterval": 300,
+                # The watchdog exits after forking the server; keep that child.
+                "AbandonProcessGroup": True,
                 "WorkingDirectory": str(config.ROOT),
                 "StandardOutPath": str(config.AGENT_LOG),
                 "StandardErrorPath": str(config.AGENT_LOG),
