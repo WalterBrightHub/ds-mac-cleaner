@@ -1,0 +1,9 @@
+.venv/
+.runtime/
+.pycache/
+__pycache__/
+*.pyc
+.env
+dist/icon-build/
+.DS_Store
+dist/

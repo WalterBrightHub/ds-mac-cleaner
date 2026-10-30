@@ -1,0 +1,3 @@
+# PostgreSQL history + icon generation. Scanner/cleaner use only the stdlib.
+psycopg2-binary==2.9.9
+Pillow==10.4.0
